@@ -1,0 +1,9 @@
+[submodule "toolchain/riscv/Darwin"]
+	path = toolchain/riscv/Darwin
+	url = git@git.bouffalolab.com:toolchain_sifive/toolchain_riscv_sifive_macos.git
+[submodule "toolchain/riscv/MSYS"]
+	path = toolchain/riscv/MSYS
+	url = git@git.bouffalolab.com:toolchain_sifive/toolchain_riscv_sifive_msys.git
+[submodule "toolchain/riscv/Linux"]
+	path = toolchain/riscv/Linux
+	url = git@git.bouffalolab.com:toolchain_sifive/toolchain_riscv_sifive_linux64.git
