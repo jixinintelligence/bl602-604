@@ -1,0 +1,3 @@
+[submodule "rf"]
+	path = rf
+	url = git@10.28.10.249:bouffalo_sw/bl602_rf_driver.git
