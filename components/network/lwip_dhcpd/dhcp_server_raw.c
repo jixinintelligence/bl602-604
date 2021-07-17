@@ -39,7 +39,7 @@
 
 /* the DHCP server address */
 #ifndef DHCPD_SERVER_IP
-    #define DHCPD_SERVER_IP "192.168.169.1"
+    #define DHCPD_SERVER_IP "192.168.4.1"
 #endif
 
 #define DHCP_DEBUG_PRINTF
@@ -132,13 +132,18 @@ dhcp_client_find_by_mac(struct dhcp_server *dhcpserver, const u8_t *chaddr, u8_t
 * @return dhcp client node
 */
 static struct dhcp_client_node *
-dhcp_client_find_by_ip(struct dhcp_server *dhcpserver, const ip4_addr_t *ip)
+dhcp_client_find_by_ip(struct dhcp_server *dhcpserver, const uint8_t *ip)
 {
     struct dhcp_client_node *node;
+    ip_addr_t ipaddr;
+    uint32_t ipval;
 
+    // Copy ipaddr to avoid aligment issue
+    memcpy(&ipval, ip, sizeof(ipval));
+    ip4_addr_set_u32(&ipaddr, ipval);
     for (node = dhcpserver->node_list; node != NULL; node = node->next)
     {
-        if (ip4_addr_cmp(&node->ipaddr, ip))
+        if (ip4_addr_cmp(&node->ipaddr, &ipaddr))
         {
             return node;
         }
@@ -172,7 +177,7 @@ dhcp_client_find(struct dhcp_server *dhcpserver, struct dhcp_msg *msg,
     opt = dhcp_server_option_find(opt_buf, len, DHCP_OPTION_REQUESTED_IP);
     if (opt != NULL)
     {
-        node = dhcp_client_find_by_ip(dhcpserver, (ip4_addr_t *)(&opt[2]));
+        node = dhcp_client_find_by_ip(dhcpserver, &opt[2]);
         if (node != NULL)
         {
             if (0 == memcmp(node->chaddr, msg->chaddr, msg->hlen)) {
@@ -211,7 +216,7 @@ dhcp_client_alloc(struct dhcp_server *dhcpserver, struct dhcp_msg *msg,
     opt = dhcp_server_option_find(opt_buf, len, DHCP_OPTION_REQUESTED_IP);
     if (opt != NULL)
     {
-        node = dhcp_client_find_by_ip(dhcpserver, (ip4_addr_t *)(&opt[2]));
+        node = dhcp_client_find_by_ip(dhcpserver, &opt[2]);
         if (node != NULL)
         {
             return node;
@@ -219,7 +224,7 @@ dhcp_client_alloc(struct dhcp_server *dhcpserver, struct dhcp_msg *msg,
     }
 
 dhcp_alloc_again:
-    node = dhcp_client_find_by_ip(dhcpserver, &dhcpserver->current);
+    node = dhcp_client_find_by_ip(dhcpserver, (uint8_t*)&dhcpserver->current);
     if (node != NULL)
     {
         ipaddr = (ntohl(dhcpserver->current.addr) + 1);

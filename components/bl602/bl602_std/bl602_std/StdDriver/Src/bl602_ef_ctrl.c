@@ -97,12 +97,13 @@
  * @return None
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 void ATTR_TCM_SECTION EF_Ctrl_Sw_AHB_Clk_0(void)
 {
     uint32_t tmpVal;
     uint32_t timeout=EF_CTRL_DFT_TIMEOUT_VAL;
-    
+
     while(EF_Ctrl_Busy()==SET){
         timeout--;
         if(timeout==0){
@@ -122,6 +123,7 @@ void ATTR_TCM_SECTION EF_Ctrl_Sw_AHB_Clk_0(void)
 
     BL_WR_REG(EF_CTRL_BASE,EF_CTRL_EF_IF_CTRL_0,tmpVal);
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Program efuse region 0
@@ -131,11 +133,12 @@ void ATTR_TCM_SECTION EF_Ctrl_Sw_AHB_Clk_0(void)
  * @return None
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 void ATTR_TCM_SECTION EF_Ctrl_Program_Efuse_0(void)
 {
     uint32_t tmpVal;
-    
+
     /* Select auto mode and select ef clock */
     tmpVal=(EF_CTRL_EFUSE_CTRL_PROTECT)| \
              (EF_CTRL_OP_MODE_AUTO<<EF_CTRL_EF_IF_0_MANUAL_EN_POS)| \
@@ -175,6 +178,7 @@ void ATTR_TCM_SECTION EF_Ctrl_Program_Efuse_0(void)
              (1<<EF_CTRL_EF_IF_0_TRIG_POS);
     BL_WR_REG(EF_CTRL_BASE,EF_CTRL_EF_IF_CTRL_0,tmpVal);
 }
+#endif
 
 /*@} end of group SEC_EF_CTRL_Private_Functions */
 
@@ -190,13 +194,14 @@ void ATTR_TCM_SECTION EF_Ctrl_Program_Efuse_0(void)
  * @return None
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 void ATTR_TCM_SECTION EF_Ctrl_Load_Efuse_R0(void)
 {
-    
+
     uint32_t tmpVal;
     uint32_t timeout=EF_CTRL_DFT_TIMEOUT_VAL;
-    
+
     EF_CTRL_DATA0_CLEAR;
 
     /* Trigger read */
@@ -210,7 +215,7 @@ void ATTR_TCM_SECTION EF_Ctrl_Load_Efuse_R0(void)
              (0<<EF_CTRL_EF_IF_0_RW_POS)| \
              (0<<EF_CTRL_EF_IF_0_TRIG_POS);
     BL_WR_REG(EF_CTRL_BASE,EF_CTRL_EF_IF_CTRL_0,tmpVal);
-    
+
     tmpVal=(EF_CTRL_EFUSE_CTRL_PROTECT)| \
              (EF_CTRL_OP_MODE_AUTO<<EF_CTRL_EF_IF_0_MANUAL_EN_POS)| \
              (EF_CTRL_PARA_DFT <<EF_CTRL_EF_IF_0_CYC_MODIFY_POS)| \
@@ -221,7 +226,7 @@ void ATTR_TCM_SECTION EF_Ctrl_Load_Efuse_R0(void)
              (0<<EF_CTRL_EF_IF_0_RW_POS)| \
              (1<<EF_CTRL_EF_IF_0_TRIG_POS);
     BL_WR_REG(EF_CTRL_BASE,EF_CTRL_EF_IF_CTRL_0,tmpVal);
-    
+
     BL602_Delay_US(10);
     /* Wait for efuse control idle*/
     do{
@@ -230,9 +235,9 @@ void ATTR_TCM_SECTION EF_Ctrl_Load_Efuse_R0(void)
         if(timeout==0){
             break;
         }
-    }while(BL_IS_REG_BIT_SET(tmpVal,EF_CTRL_EF_IF_0_BUSY) || 
+    }while(BL_IS_REG_BIT_SET(tmpVal,EF_CTRL_EF_IF_0_BUSY) ||
            (!BL_IS_REG_BIT_SET(tmpVal,EF_CTRL_EF_IF_0_AUTOLOAD_DONE)));
-    
+
     /* Switch to AHB clock */
     tmpVal=(EF_CTRL_EFUSE_CTRL_PROTECT)| \
              (EF_CTRL_OP_MODE_AUTO<<EF_CTRL_EF_IF_0_MANUAL_EN_POS)| \
@@ -245,6 +250,7 @@ void ATTR_TCM_SECTION EF_Ctrl_Load_Efuse_R0(void)
              (0<<EF_CTRL_EF_IF_0_TRIG_POS);
     BL_WR_REG(EF_CTRL_BASE,EF_CTRL_EF_IF_CTRL_0,tmpVal);
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Check efuse busy status
@@ -254,6 +260,7 @@ void ATTR_TCM_SECTION EF_Ctrl_Load_Efuse_R0(void)
  * @return SET or RESET
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Sts_Type ATTR_TCM_SECTION EF_Ctrl_Busy(void)
 {
@@ -263,9 +270,10 @@ BL_Sts_Type ATTR_TCM_SECTION EF_Ctrl_Busy(void)
     if(BL_IS_REG_BIT_SET(tmpVal,EF_CTRL_EF_IF_0_BUSY)){
         return SET;
     }
-    
+
     return RESET;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Check efuse whether finish loading
@@ -275,19 +283,21 @@ BL_Sts_Type ATTR_TCM_SECTION EF_Ctrl_Busy(void)
  * @return SET or RESET
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Sts_Type ATTR_TCM_SECTION EF_Ctrl_AutoLoad_Done(void)
 {
     uint32_t tmpVal;
 
     tmpVal=BL_RD_REG(EF_CTRL_BASE,EF_CTRL_EF_IF_CTRL_0);
-    
+
     if(BL_IS_REG_BIT_SET(tmpVal,EF_CTRL_EF_IF_0_AUTOLOAD_DONE)){
         return SET;
     }else{
         return RESET;
     }
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Efuse write debug password
@@ -325,7 +335,7 @@ void EF_Ctrl_Read_Dbg_Pwd(uint32_t *passWdLow, uint32_t *passWdHigh)
 {
     /* Trigger read data from efuse */
     EF_CTRL_LOAD_BEFORE_READ_R0;
-    
+
     *passWdLow=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_DBG_PWD_LOW);
     *passWdHigh=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_DBG_PWD_HIGH);
 }
@@ -341,17 +351,84 @@ void EF_Ctrl_Read_Dbg_Pwd(uint32_t *passWdLow, uint32_t *passWdHigh)
 void EF_Ctrl_Readlock_Dbg_Pwd(uint8_t program)
 {
     uint32_t tmpVal;
-    
+
     /* Switch to AHB clock */
     EF_Ctrl_Sw_AHB_Clk_0();
 
     tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_LOCK);
     tmpVal= BL_SET_REG_BIT(tmpVal,EF_DATA_0_RD_LOCK_DBG_PWD);
     BL_WR_REG(EF_DATA_BASE,EF_DATA_0_LOCK,tmpVal);
-    
+
     if(program){
         EF_Ctrl_Program_Efuse_0();
     }
+}
+
+
+/****************************************************************************//**
+ * @brief  Efuse read LDO11 Vout sel trim
+ *
+ * @param  Ldo11VoutSelValue: Ldo11VoutSelValue
+ *
+ * @return SUCCESS or ERROR
+ *
+*******************************************************************************/
+BL_Err_Type EF_Ctrl_Read_Ldo11VoutSel_Opt(uint8_t *Ldo11VoutSelValue)
+{
+    uint32_t tmp;
+    Efuse_Ldo11VoutSelTrim_Info_Type *trim=(Efuse_Ldo11VoutSelTrim_Info_Type *)&tmp;
+
+    /* Switch to AHB clock */
+    EF_Ctrl_Sw_AHB_Clk_0();
+	
+	EF_CTRL_LOAD_BEFORE_READ_R0;
+
+    tmp=(BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_KEY_SLOT_4_W3))>>7;
+    
+
+    if(trim->en){
+        if(trim->parity==EF_Ctrl_Get_Trim_Parity(trim->sel_value,4)){
+            *Ldo11VoutSelValue=trim->sel_value;
+            return SUCCESS;
+        }
+    }
+    return ERROR;
+}
+
+/****************************************************************************//**
+ * @brief  Efuse read LDO11 Vout sel trim
+ *
+ * @param  TxPower: TxPower
+ *
+ * @return SUCCESS or ERROR
+ *
+*******************************************************************************/
+BL_Err_Type EF_Ctrl_Read_TxPower_ATE(int8_t *TxPower)
+{
+    uint32_t tmp;
+    Efuse_TxPower_Info_Type *trim=(Efuse_TxPower_Info_Type *)&tmp; 
+
+
+    /* Switch to AHB clock */
+    EF_Ctrl_Sw_AHB_Clk_0();
+	
+	EF_CTRL_LOAD_BEFORE_READ_R0;
+
+    tmp=(BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_KEY_SLOT_4_W3))>>0;
+
+    if(trim->en){
+        if(trim->parity==EF_Ctrl_Get_Trim_Parity(trim->txpower,5)){
+            if(trim->txpower >= 16){
+                *TxPower=trim->txpower - 32;
+            }
+            else{
+                *TxPower=trim->txpower;    
+            }
+            
+            return SUCCESS;
+        }
+    }
+    return ERROR;
 }
 
 /****************************************************************************//**
@@ -365,14 +442,14 @@ void EF_Ctrl_Readlock_Dbg_Pwd(uint8_t program)
 void EF_Ctrl_Writelock_Dbg_Pwd(uint8_t program)
 {
     uint32_t tmpVal;
-    
+
     /* Switch to AHB clock */
     EF_Ctrl_Sw_AHB_Clk_0();
 
     tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_LOCK);
     tmpVal= BL_SET_REG_BIT(tmpVal,EF_DATA_0_WR_LOCK_DBG_PWD);
     BL_WR_REG(EF_DATA_BASE,EF_DATA_0_LOCK,tmpVal);
-    
+
     if(program){
         EF_Ctrl_Program_Efuse_0();
     }
@@ -390,13 +467,13 @@ void EF_Ctrl_Writelock_Dbg_Pwd(uint8_t program)
 void EF_Ctrl_Write_Secure_Cfg(EF_Ctrl_Sec_Param_Type *cfg,uint8_t program)
 {
     uint32_t tmpVal;
-	
+
     tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_CFG_0);
-	tmpVal= BL_SET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_DBG_MODE,cfg->ef_dbg_mode);
-	tmpVal= BL_SET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_DBG_JTAG_0_DIS,cfg->ef_dbg_jtag_0_dis);
-	tmpVal= BL_SET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_SBOOT_EN,cfg->ef_sboot_en);
-	BL_WR_REG(EF_DATA_BASE,EF_DATA_0_EF_CFG_0,tmpVal);
-	
+    tmpVal= BL_SET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_DBG_MODE,cfg->ef_dbg_mode);
+    tmpVal= BL_SET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_DBG_JTAG_0_DIS,cfg->ef_dbg_jtag_0_dis);
+    tmpVal= BL_SET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_SBOOT_EN,cfg->ef_sboot_en);
+    BL_WR_REG(EF_DATA_BASE,EF_DATA_0_EF_CFG_0,tmpVal);
+
     if(program){
         EF_Ctrl_Program_Efuse_0();
     }
@@ -413,12 +490,12 @@ void EF_Ctrl_Write_Secure_Cfg(EF_Ctrl_Sec_Param_Type *cfg,uint8_t program)
 void EF_Ctrl_Read_Secure_Cfg(EF_Ctrl_Sec_Param_Type *cfg)
 {
     uint32_t tmpVal;
-  
+
     /* Trigger read data from efuse */
     EF_CTRL_LOAD_BEFORE_READ_R0;
 
     tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_CFG_0);
-    
+
     cfg->ef_dbg_mode =(EF_Ctrl_Dbg_Mode_Type)BL_GET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_DBG_MODE);
     cfg->ef_dbg_jtag_0_dis=BL_GET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_DBG_JTAG_0_DIS);
     cfg->ef_sboot_en =BL_GET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_SBOOT_EN);
@@ -438,21 +515,21 @@ void EF_Ctrl_Read_Secure_Cfg(EF_Ctrl_Sec_Param_Type *cfg)
 void EF_Ctrl_Write_Secure_Boot(EF_Ctrl_Sign_Type sign[1], EF_Ctrl_SF_AES_Type aes[1],uint8_t program)
 {
     uint32_t tmpVal;
-    
+
     /* Switch to AHB clock */
     EF_Ctrl_Sw_AHB_Clk_0();
 
     tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_CFG_0);
-    
+
     tmpVal= BL_SET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_SBOOT_SIGN_MODE,sign[0]);
-    
+
     if(aes[0]!=EF_CTRL_SF_AES_NONE){
         tmpVal= BL_SET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_SF_AES_MODE,aes[0]);
         tmpVal= BL_SET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_CPU0_ENC_EN,1);
     }
-    
+
     BL_WR_REG(EF_DATA_BASE,EF_DATA_0_EF_CFG_0,tmpVal);
-    
+
     if( program){
         EF_Ctrl_Program_Efuse_0();
     }
@@ -471,15 +548,15 @@ void EF_Ctrl_Read_Secure_Boot(EF_Ctrl_Sign_Type sign[1], EF_Ctrl_SF_AES_Type aes
 {
     uint32_t tmpVal;
     uint32_t tmpVal2;
-  
+
     /* Trigger read data from efuse */
     EF_CTRL_LOAD_BEFORE_READ_R0;
 
     tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_CFG_0);
-    
+
     tmpVal2=BL_GET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_SBOOT_SIGN_MODE);
     sign[0]=(EF_Ctrl_Sign_Type)(tmpVal2&0x01);
-    
+
     tmpVal2=BL_GET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_CPU0_ENC_EN);
     if(tmpVal2){
         aes[0]=(EF_Ctrl_SF_AES_Type)BL_GET_REG_BITS_VAL(tmpVal,EF_DATA_0_EF_SF_AES_MODE);
@@ -517,6 +594,7 @@ uint8_t EF_Ctrl_Get_Trim_Enable(void)
  * @return Parity bit value
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 uint8_t ATTR_CLOCK_SECTION EF_Ctrl_Get_Trim_Parity(uint32_t val,uint8_t len)
 {
@@ -531,6 +609,7 @@ uint8_t ATTR_CLOCK_SECTION EF_Ctrl_Get_Trim_Parity(uint32_t val,uint8_t len)
 
     return cnt&0x01;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Efuse write analog trim
@@ -569,7 +648,7 @@ void EF_Ctrl_Read_Ana_Trim( uint32_t index, uint32_t *trim)
 {
     /* Switch to AHB clock */
     EF_Ctrl_Sw_AHB_Clk_0();
-    
+
     EF_CTRL_LOAD_BEFORE_READ_R0;
 
     if(index==0){
@@ -585,6 +664,7 @@ void EF_Ctrl_Read_Ana_Trim( uint32_t index, uint32_t *trim)
  * @return None
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 void ATTR_CLOCK_SECTION EF_Ctrl_Read_RC32M_Trim( Efuse_Ana_RC32M_Trim_Type *trim)
 {
@@ -599,6 +679,7 @@ void ATTR_CLOCK_SECTION EF_Ctrl_Read_RC32M_Trim( Efuse_Ana_RC32M_Trim_Type *trim
     trim->trimRc32mCodeFrExtParity=(tmpVal>>18)&0x01;
     trim->trimRc32mExtCodeEn=(tmpVal>>19)&0x01;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Efuse read RC32K trim
@@ -608,6 +689,7 @@ void ATTR_CLOCK_SECTION EF_Ctrl_Read_RC32M_Trim( Efuse_Ana_RC32M_Trim_Type *trim
  * @return None
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 void ATTR_CLOCK_SECTION EF_Ctrl_Read_RC32K_Trim( Efuse_Ana_RC32K_Trim_Type *trim)
 {
@@ -622,6 +704,60 @@ void ATTR_CLOCK_SECTION EF_Ctrl_Read_RC32K_Trim( Efuse_Ana_RC32K_Trim_Type *trim
     trim->trimRc32kCodeFrExtParity=(tmpVal>>30)&0x01;
     trim->trimRc32kExtCodeEn=(tmpVal>>31)&0x01;
 }
+#endif
+
+/****************************************************************************//**
+ * @brief  Efuse read TSEN trim
+ *
+ * @param  trim: Trim data pointer
+ *
+ * @return None
+ *
+*******************************************************************************/
+void ATTR_CLOCK_SECTION EF_Ctrl_Read_TSEN_Trim( Efuse_TSEN_Refcode_Corner_Type *trim)
+{
+    uint32_t tmpVal=0;
+    /* Switch to AHB clock */
+    EF_Ctrl_Sw_AHB_Clk_0();
+
+    EF_CTRL_LOAD_BEFORE_READ_R0;
+
+    tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_KEY_SLOT_5_W3);
+    trim->tsenRefcodeCornerEn=tmpVal&0x01;
+
+    tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_LOCK);
+    trim->tsenRefcodeCorner=tmpVal&0xfff;
+    trim->tsenRefcodeCornerParity=(tmpVal >> 12)&0x01;
+
+    tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_KEY_SLOT_5_W1);
+    trim->tsenRefcodeCornerVersion=(tmpVal >> 30)&0x01;
+
+}
+
+
+/****************************************************************************//**
+ * @brief  Efuse read ADC Gain trim
+ *
+ * @param  trim: Trim data pointer
+ *
+ * @return None
+ *
+*******************************************************************************/
+void ATTR_CLOCK_SECTION EF_Ctrl_Read_ADC_Gain_Trim( Efuse_ADC_Gain_Coeff_Type *trim)
+{
+    uint32_t tmpVal=0;
+    /* Switch to AHB clock */
+    EF_Ctrl_Sw_AHB_Clk_0();
+
+    EF_CTRL_LOAD_BEFORE_READ_R0;
+
+    tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_KEY_SLOT_5_W3);
+    trim -> adcGainCoeff = (tmpVal >> 1) & 0xfff;
+    trim -> adcGainCoeffParity = (tmpVal >> 13) & 0x01;
+    trim -> adcGainCoeffEn = (tmpVal >> 14) & 0x01;
+}
+
+
 
 /****************************************************************************//**
  * @brief  Efuse write software usage
@@ -660,7 +796,7 @@ void EF_Ctrl_Read_Sw_Usage( uint32_t index, uint32_t *usage)
 {
     /* Switch to AHB clock */
     EF_Ctrl_Sw_AHB_Clk_0();
-    
+
     EF_CTRL_LOAD_BEFORE_READ_R0;
 
     if(index==0){
@@ -680,17 +816,17 @@ void EF_Ctrl_Read_Sw_Usage( uint32_t index, uint32_t *usage)
 void EF_Ctrl_Writelock_Sw_Usage(uint32_t index, uint8_t program)
 {
     uint32_t tmpVal;
-    
+
     /* Switch to AHB clock */
     EF_Ctrl_Sw_AHB_Clk_0();
 
     tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_LOCK);
-    
+
     if(index==0){
         tmpVal= BL_SET_REG_BIT(tmpVal,EF_DATA_0_WR_LOCK_SW_USAGE_0);
-    }    
+    }
     BL_WR_REG(EF_DATA_BASE,EF_DATA_0_LOCK,tmpVal);
-    
+
     if(program){
         EF_Ctrl_Program_Efuse_0();
     }
@@ -760,17 +896,17 @@ BL_Err_Type EF_Ctrl_Read_MAC_Address(uint8_t mac[6])
     uint32_t tmpVal;
     uint32_t i=0;
     uint32_t cnt=0;
-  
+
     /* Trigger read data from efuse */
     EF_CTRL_LOAD_BEFORE_READ_R0;
 
     tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_WIFI_MAC_LOW);
     BL_WRWD_TO_BYTEP(maclow,tmpVal);
-    
+
     tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_WIFI_MAC_HIGH);
     machigh[0]=tmpVal&0xff;
     machigh[1]=(tmpVal>>8)&0xff;
-    
+
     /* Check parity */
     for(i=0;i<6;i++){
         cnt+=EF_Ctrl_Get_Byte_Zero_Cnt(mac[i]);
@@ -785,7 +921,7 @@ BL_Err_Type EF_Ctrl_Read_MAC_Address(uint8_t mac[6])
         return SUCCESS;
     }else{
         return ERROR;
-    }    
+    }
 }
 
 /****************************************************************************//**
@@ -827,7 +963,7 @@ BL_Err_Type EF_Ctrl_Read_MAC_Address_Raw(uint8_t mac[7])
 void EF_Ctrl_Writelock_MAC_Address(uint8_t program)
 {
     uint32_t tmpVal;
-    
+
     /* Switch to AHB clock */
     EF_Ctrl_Sw_AHB_Clk_0();
 
@@ -1080,12 +1216,12 @@ void EF_Ctrl_Read_Device_Info(Efuse_Device_Info_Type *deviceInfo)
 {
     uint32_t tmpVal;
     uint32_t *p=(uint32_t *)deviceInfo;
-  
+
     /* Trigger read data from efuse */
     EF_CTRL_LOAD_BEFORE_READ_R0;
-    
+
     tmpVal=BL_RD_REG(EF_DATA_BASE,EF_DATA_0_EF_WIFI_MAC_HIGH);
-    *p=(tmpVal>>20)&0xfff;
+    *p=tmpVal;
 }
 
 /****************************************************************************//**
@@ -1402,16 +1538,16 @@ BL_Err_Type EF_Ctrl_Read_PowerOffset_Opt(uint8_t slot,int8_t pwrOffset[3],uint8_
 void EF_Ctrl_Write_AES_Key(uint8_t index,uint32_t *keyData,uint32_t len,uint8_t program)
 {
     uint32_t *pAESKeyStart0=(uint32_t *)(EF_DATA_BASE+0x1C);
-    
+
     if(index>5){
         return;
     }
     /* Switch to AHB clock */
     EF_Ctrl_Sw_AHB_Clk_0();
-    
+
     /* Every key is 4 words len*/
     BL602_MemCpy4(pAESKeyStart0+index*4,keyData,len);
-   
+
     if( program){
         EF_Ctrl_Program_Efuse_0();
     }
@@ -1430,13 +1566,13 @@ void EF_Ctrl_Write_AES_Key(uint8_t index,uint32_t *keyData,uint32_t len,uint8_t 
 void EF_Ctrl_Read_AES_Key(uint8_t index,uint32_t *keyData,uint32_t len)
 {
     uint32_t *pAESKeyStart0=(uint32_t *)(EF_DATA_BASE+0x1C);
-    
+
     if(index>5){
         return;
     }
     /* Trigger read data from efuse*/
     EF_CTRL_LOAD_BEFORE_READ_R0;
-    
+
     /* Every key is 4 words len*/
     BL602_MemCpy4(keyData,pAESKeyStart0+index*4,len);
 }
@@ -1453,7 +1589,7 @@ void EF_Ctrl_Read_AES_Key(uint8_t index,uint32_t *keyData,uint32_t len)
 void EF_Ctrl_Writelock_AES_Key(uint8_t index,uint8_t program)
 {
     uint32_t tmpVal;
-    
+
     if(index>5){
         return;
     }
@@ -1486,7 +1622,7 @@ void EF_Ctrl_Writelock_AES_Key(uint8_t index,uint8_t program)
 void EF_Ctrl_Readlock_AES_Key(uint8_t index,uint8_t program)
 {
     uint32_t tmpVal;
-    
+
     if(index>5){
         return;
     }
@@ -1515,10 +1651,10 @@ void EF_Ctrl_Readlock_AES_Key(uint8_t index,uint8_t program)
 void EF_Ctrl_Program_Direct_R0(uint32_t index, uint32_t *data, uint32_t len)
 {
     uint32_t *pEfuseStart0=(uint32_t *)(EF_DATA_BASE+0x00);
-    
+
     /* Switch to AHB clock */
     EF_Ctrl_Sw_AHB_Clk_0();
-    
+
     /* Add delay for CLK to be stable */
     BL602_Delay_US(4);
 
@@ -1540,8 +1676,48 @@ void EF_Ctrl_Program_Direct_R0(uint32_t index, uint32_t *data, uint32_t len)
 void EF_Ctrl_Read_Direct_R0(uint32_t index, uint32_t *data, uint32_t len)
 {
     uint32_t *pEfuseStart0=(uint32_t *)(EF_DATA_BASE+0x00);
-    
+
     EF_CTRL_LOAD_BEFORE_READ_R0;
+
+    BL602_MemCpy4(data,pEfuseStart0+index,len);
+}
+
+/****************************************************************************//**
+ * @brief  Write data to efuse region 0 without program
+ *
+ * @param  index: index of efuse in word
+ * @param  data: data buffer
+ * @param  len: data length
+ *
+ * @return None
+ *
+*******************************************************************************/
+void EF_Ctrl_Write_R0(uint32_t index, uint32_t *data, uint32_t len)
+{
+    uint32_t *pEfuseStart0=(uint32_t *)(EF_DATA_BASE+0x00);
+
+    /* Switch to AHB clock */
+    EF_Ctrl_Sw_AHB_Clk_0();
+
+    /* Add delay for CLK to be stable */
+    BL602_Delay_US(4);
+
+    BL602_MemCpy4(pEfuseStart0+index,data,len);
+}
+
+/****************************************************************************//**
+ * @brief  Read data from efuse region 0 without reload
+ *
+ * @param  index: index of efuse in word
+ * @param  data: data buffer
+ * @param  len: data length
+ *
+ * @return None
+ *
+*******************************************************************************/
+void EF_Ctrl_Read_R0(uint32_t index, uint32_t *data, uint32_t len)
+{
+    uint32_t *pEfuseStart0=(uint32_t *)(EF_DATA_BASE+0x00);
 
     BL602_MemCpy4(data,pEfuseStart0+index,len);
 }
@@ -1555,20 +1731,22 @@ void EF_Ctrl_Read_Direct_R0(uint32_t index, uint32_t *data, uint32_t len)
  * @return None
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 void ATTR_TCM_SECTION EF_Ctrl_Clear(uint32_t index, uint32_t len)
 {
     uint32_t *pEfuseStart0=(uint32_t *)(EF_DATA_BASE+0x00);
     uint32_t i=0;
-    
+
     /* Switch to AHB clock */
     EF_Ctrl_Sw_AHB_Clk_0();
 
     /* Clear data */
     for(i=0;i<len;i++){
         pEfuseStart0[index+i]=0;
-    }      
+    }
 }
+#endif
 
 /****************************************************************************//**
  * @brief  efuse ctrl crc enable

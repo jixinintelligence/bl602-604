@@ -38,6 +38,7 @@ int32_t bflb_hash_init(bflb_hash_handle_t *hash_handle,uint8_t type)
         case BFLB_HASH_TYPE_SHA224:
             Sec_Eng_SHA256_Init(&shaCtx,SEC_ENG_SHA_ID0,SEC_ENG_SHA224,(uint32_t *)hash_handle->hash_ctx.sha_buf,
                                                                 (uint32_t *)hash_handle->sha_padding);
+            break;
         case BFLB_HASH_TYPE_SHA256 :
             Sec_Eng_SHA256_Init(&shaCtx,SEC_ENG_SHA_ID0,SEC_ENG_SHA256,(uint32_t *)hash_handle->hash_ctx.sha_buf,
                                                                 (uint32_t *)hash_handle->sha_padding);

@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 /** @file
  *  @brief Bluetooth subsystem core APIs.
  */
@@ -291,7 +262,8 @@ enum {
 	 *  connection happens. If this option is not set the stack will
 	 *  take care of keeping advertising enabled even as connections
 	 *  occur.
-	 */
+	 */ 
+	/* if defined CONFIG_BLE_MULTI_ADV , Only support adv one time.*/
 	BT_LE_ADV_OPT_ONE_TIME = BIT(1),
 
 	/** Advertise using the identity address as the own address.
@@ -521,10 +493,10 @@ struct bt_le_scan_param {
  *  of protocol error or negative (POSIX) in case of stack internal error
  */
 #if defined(CONFIG_BT_STACK_PTS)
-int bt_le_scan_start(const struct bt_le_scan_param *param, bt_le_scan_cb_t cb, u8_t addre_type);
-#else
-int bt_le_scan_start(const struct bt_le_scan_param *param, bt_le_scan_cb_t cb);
+int bt_le_pts_scan_start(const struct bt_le_scan_param *param, bt_le_scan_cb_t cb, u8_t addre_type);
 #endif
+int bt_le_scan_start(const struct bt_le_scan_param *param, bt_le_scan_cb_t cb);
+
 
 /** @brief Stop (LE) scanning.
  *
@@ -715,6 +687,9 @@ int bt_br_discovery_start(const struct bt_br_discovery_param *param,
  */
 int bt_br_discovery_stop(void);
 
+int bt_disable(void);
+
+
 struct bt_br_oob {
 	/** BR/EDR address. */
 	bt_addr_t addr;
@@ -874,10 +849,13 @@ struct bt_bond_info {
   * @param func       Function to call for each bond.
   * @param user_data  Data to pass to the callback function.
   */
-void bt_foreach_bond(u8_t id, void (*func)(const struct bt_bond_info *info,
-					   void *user_data),
+void bt_foreach_bond(u8_t id, void (*func)(const struct bt_bond_info *info, void *user_data),
 		     void *user_data);
 
+/**
+  * write extern inquiry response.
+  */
+int bt_br_write_eir(u8_t rec, u8_t *data);
 /**
  * @}
  */

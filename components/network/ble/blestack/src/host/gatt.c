@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 /* gatt.c - Generic Attribute Profile handling */
 
 /*
@@ -917,7 +888,7 @@ static void sc_process(struct k_work *work)
 		 "Indicate already pending");
 
 	BT_DBG("start 0x%04x end 0x%04x", sc->start, sc->end);
-
+	
 	sc_range[0] = sys_cpu_to_le16(sc->start);
 	sc_range[1] = sys_cpu_to_le16(sc->end);
 
@@ -940,6 +911,31 @@ static void sc_process(struct k_work *work)
 
 	atomic_set_bit(sc->flags, SC_INDICATE_PENDING);
 }
+
+#if defined(CONFIG_BT_STACK_PTS)
+int service_change_test(struct bt_gatt_indicate_params *params,const struct bt_conn *con)
+{
+	u16_t sc_range[2];
+	
+	if(!params->attr){
+		#if defined(BFLB_BLE_DISABLE_STATIC_ATTR)
+		params->attr = &gatt_attrs[2];
+		#else
+		params->attr = &_1_gatt_svc.attrs[2];
+		#endif
+	}	
+	sc_range[0] = 0x000e;
+	sc_range[1] = 0x001e;
+	
+	params->data = &sc_range[0];
+	params->len = sizeof(sc_range);
+		
+	if (bt_gatt_indicate(con, params)) {
+		/* No connections to indicate */
+		return;
+	}
+}
+#endif
 
 #if defined(CONFIG_BT_SETTINGS_CCC_STORE_ON_WRITE)
 static struct gatt_ccc_store {
@@ -1035,17 +1031,41 @@ void bt_gatt_init(void)
 #endif
 }
 
+#if defined(BFLB_BLE)
+void bt_gatt_deinit(void)
+{
+    #if defined(CONFIG_BT_GATT_CACHING)
+    k_delayed_work_del_timer(&db_hash_work);
+    #endif
+
+    if (IS_ENABLED(CONFIG_BT_GATT_SERVICE_CHANGED)){
+        k_delayed_work_del_timer(&gatt_sc.work);
+    }
+        
+    #if defined(CONFIG_BT_SETTINGS_CCC_STORE_ON_WRITE)
+    k_delayed_work_del_timer(&gatt_ccc_store.work);
+    #endif
+}
+#endif
+
 #if defined(CONFIG_BT_GATT_DYNAMIC_DB) || \
     (defined(CONFIG_BT_GATT_CACHING) && defined(CONFIG_BT_SETTINGS))
 static void sc_indicate(u16_t start, u16_t end)
 {
 	BT_DBG("start 0x%04x end 0x%04x", start, end);
 
+    #if defined (BFLB_BLE_PATCH_SET_SCRANGE_CHAGD_ONLY_IN_CONNECTED_STATE)
+    struct bt_conn *conn = bt_conn_lookup_state_le(NULL, BT_CONN_CONNECTED);
+    if(conn){        
+    #endif
 	if (!atomic_test_and_set_bit(gatt_sc.flags, SC_RANGE_CHANGED)) {
 		gatt_sc.start = start;
 		gatt_sc.end = end;
 		goto submit;
 	}
+    #if defined (BFLB_BLE_PATCH_SET_SCRANGE_CHAGD_ONLY_IN_CONNECTED_STATE)
+    }
+    #endif
 
 	if (!update_range(&gatt_sc.start, &gatt_sc.end, start, end)) {
 		return;
@@ -1057,8 +1077,16 @@ submit:
 		return;
 	}
 
+#if defined (BFLB_BLE_PATCH_SET_SCRANGE_CHAGD_ONLY_IN_CONNECTED_STATE)
+    if(conn){
+#endif
 	/* Reschedule since the range has changed */
 	k_delayed_work_submit(&gatt_sc.work, SC_TIMEOUT);
+#if defined (BFLB_BLE_PATCH_SET_SCRANGE_CHAGD_ONLY_IN_CONNECTED_STATE)
+    bt_conn_unref(conn);
+}
+#endif
+
 }
 #endif /* BT_GATT_DYNAMIC_DB || (BT_GATT_CACHING && BT_SETTINGS) */
 
@@ -1124,14 +1152,6 @@ int bt_gatt_service_register(struct bt_gatt_service *svc)
 	return 0;
 }
 
-
-#ifdef BFLB_BLE_PATCH_AVOID_SEC_GATT_DISC
-void bt_gatt_cancle_sc_work(void)
-{
-    k_delayed_work_cancel(&gatt_sc.work);
-}
-#endif
-
 int bt_gatt_service_unregister(struct bt_gatt_service *svc)
 {
 	__ASSERT(svc, "invalid parameters\n");
@@ -1177,7 +1197,7 @@ ssize_t bt_gatt_attr_read(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 	if(event_flag == att_read_by_group_type_ind){
 		data = (u8_t *)buf;
 		for(i=0;i<len;i++){
-			BT_STACK_PTS_DBG("%s:handle = [0x%04x], data[%d] = [0x%x]\r\n",__func__,
+			BT_PTS("%s:handle = [0x%04x], data[%d] = [0x%x]\r\n",__func__,
 															attr->handle, i, data[i]);
 		}
 	}
@@ -1721,6 +1741,7 @@ static int gatt_send(struct bt_conn *conn, struct net_buf *buf,
 	} else {
 		err = bt_att_send(conn, buf, NULL, NULL);
 	}
+
 
 	if (err) {
 		BT_ERR("Error sending ATT PDU: %d", err);
@@ -2351,6 +2372,40 @@ static void gatt_mtu_rsp(struct bt_conn *conn, u8_t err, const void *pdu,
 
 	params->func(conn, err, params);
 }
+#if defined(CONFIG_BLE_AT_CMD)
+int bt_at_gatt_exchange_mtu(struct bt_conn *conn, struct bt_gatt_exchange_params *params,u16_t mtu_size)
+{
+	struct bt_att_exchange_mtu_req *req;
+	struct net_buf *buf;
+	u16_t mtu;
+
+	__ASSERT(conn, "invalid parameter\n");
+	__ASSERT(params && params->func, "invalid parameters\n");
+
+	if (conn->state != BT_CONN_CONNECTED) {
+		return -ENOTCONN;
+	}
+
+	buf = bt_att_create_pdu(conn, BT_ATT_OP_MTU_REQ, sizeof(*req));
+	if (!buf) {
+		return -ENOMEM;
+	}
+  
+	mtu = mtu_size;
+  
+    #if defined(CONFIG_BLE_AT_CMD)
+	set_mtu_size(mtu);
+    #endif
+
+	BT_DBG("Client MTU %u", mtu);
+
+	req = net_buf_add(buf, sizeof(*req));
+	req->mtu = sys_cpu_to_le16(mtu);
+
+	return gatt_send(conn, buf, gatt_mtu_rsp, params, NULL);
+
+}
+#endif
 
 int bt_gatt_exchange_mtu(struct bt_conn *conn,
 			 struct bt_gatt_exchange_params *params)
@@ -3899,7 +3954,7 @@ static int ccc_set(const char *name, size_t len_rd, settings_read_cb read_cb,
         
 		bt_gatt_foreach_attr(0x0001, 0xffff, ccc_load, &load);
 
-		BT_DBG("Restored CCC for id:%" PRIu8 " addr:%s",
+		BT_DBG("Restored CCC for id:%x" "PRIu8" " addr:%s",
 		       load.addr_with_id.id,
 		       bt_addr_le_str(load.addr_with_id.addr));
 	}
@@ -3936,8 +3991,12 @@ static int ccc_set_direct(const char *key, size_t len, settings_read_cb read_cb,
 #endif
 
 #if defined(BFLB_BLE)
+#if defined(CONFIG_BT_GATT_SERVICE_CHANGED)
+#if defined(CONFIG_BT_SETTINGS)
 static int sc_set(u8_t id, bt_addr_le_t *addr);
 static int sc_commit(void);
+#endif
+#endif
 #endif
 void bt_gatt_connected(struct bt_conn *conn)
 {

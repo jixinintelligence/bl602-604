@@ -21,6 +21,10 @@
 extern "C" {
 #endif
 
+#include "include/access.h" /* Add by bouffalo */
+#include "prov.h" /* Add by bouffalo */
+
+/** Available Provisioning output authentication actions. */
 typedef enum {
 	BT_MESH_NO_OUTPUT       = 0,
 	BT_MESH_BLINK           = BIT(0),
@@ -30,6 +34,7 @@ typedef enum {
 	BT_MESH_DISPLAY_STRING  = BIT(4),
 } bt_mesh_output_action_t;
 
+/** Available Provisioning input authentication actions. */
 typedef enum {
 	BT_MESH_NO_INPUT      = 0,
 	BT_MESH_PUSH          = BIT(0),
@@ -38,11 +43,13 @@ typedef enum {
 	BT_MESH_ENTER_STRING  = BIT(3),
 } bt_mesh_input_action_t;
 
+/** Available Provisioning bearers. */
 typedef enum {
 	BT_MESH_PROV_ADV   = BIT(0),
 	BT_MESH_PROV_GATT  = BIT(1),
 } bt_mesh_prov_bearer_t;
 
+/** Out of Band information location. */
 typedef enum {
 	BT_MESH_PROV_OOB_OTHER     = BIT(0),
 	BT_MESH_PROV_OOB_URI       = BIT(1),
@@ -84,11 +91,18 @@ struct bt_mesh_prov {
 	/** Supported Output OOB Actions */
 	u16_t       output_actions;
 
-	/* Maximum size of Input OOB supported */
+	/** Maximum size of Input OOB supported */
 	u8_t        input_size;
 	/** Supported Input OOB Actions */
 	u16_t       input_actions;
 
+#ifdef CONFIG_BT_MESH_PROVISIONER
+	/** Add by bouffalo
+	 * prov_caps include provisionee's capabilities;
+	 * prov_start will be set by user, for provisioner used capability.
+	 */
+	u8_t (*capabilities)(prov_caps_t* prv_caps, prov_start_t* prv_start);
+#endif
 	/** @brief Output of a number is requested.
 	 *
 	 *  This callback notifies the application that it should
@@ -128,15 +142,29 @@ struct bt_mesh_prov {
 	 */
 	int         (*input)(bt_mesh_input_action_t act, u8_t size);
 
-    /** @brief The other device finished their OOB input.
+	/** @brief The other device finished their OOB input.
 	 *
-	 * This callback notifies the application that it should stop
-	 * displaying its output OOB value, as the other party finished their
-	 * OOB input.
+	 *  This callback notifies the application that it should stop
+	 *  displaying its output OOB value, as the other party finished their
+	 *  OOB input.
 	 */
 	void 	    (*input_complete)(void);
 
-    /** @brief Provisioning link has been opened.
+	/** @brief Unprovisioned beacon has been received.
+	 *
+	 *  This callback notifies the application that an unprovisioned
+	 *  beacon has been received.
+	 *
+	 *  @param uuid     UUID
+	 *  @param oob_info OOB Information
+	 *  @param uri_hash Pointer to URI Hash value. NULL if no hash was
+	 *                  present in the beacon.
+	 */
+	void        (*unprovisioned_beacon)(u8_t uuid[16],
+					    bt_mesh_prov_oob_info_t oob_info,
+					    u32_t *uri_hash);
+
+	/** @brief Provisioning link has been opened.
 	 *
 	 *  This callback notifies the application that a provisioning
 	 *  link has been opened on the given provisioning bearer.
@@ -161,9 +189,23 @@ struct bt_mesh_prov {
 	 *  assigned the specified NetKeyIndex and primary element address.
 	 *
 	 *  @param net_idx NetKeyIndex given during provisioning.
-	 *  @param addr Primary element address.
+	 *  @param addr    Primary element address.
 	 */
 	void        (*complete)(u16_t net_idx, u16_t addr);
+
+	/** @brief A new node has been added to the provisioning database.
+	 *
+	 *  This callback notifies the application that provisioning has
+	 *  been successfully completed, and that a node has been assigned
+	 *  the specified NetKeyIndex and primary element address.
+	 *
+	 *  @param net_idx  NetKeyIndex given during provisioning.
+	 *  @param uuid     UUID of the added node
+	 *  @param addr     Primary element address.
+	 *  @param num_elem Number of elements that this node has.
+	 */
+	void        (*node_added)(u16_t net_idx, u8_t uuid[16], u16_t addr,
+				  u8_t num_elem);
 
 	/** @brief Node has been reset.
 	 *
@@ -174,6 +216,13 @@ struct bt_mesh_prov {
 	 *  unprovisioned advertising on one or more provisioning bearers.
 	 */
 	void        (*reset)(void);
+#ifdef CONFIG_BT_MESH_PROVISIONER
+	/** @brief Added by bouffalo lab , add role type.
+	 * 0 For node.
+	 * 1 For provisioner.
+	 */
+	u8_t role;
+#endif
 };
 
 /** @brief Provide provisioning input OOB string.
@@ -218,6 +267,49 @@ int bt_mesh_prov_enable(bt_mesh_prov_bearer_t bearers);
  */
 int bt_mesh_prov_disable(bt_mesh_prov_bearer_t bearers);
 
+/** @brief Provision the local Mesh Node.
+ *
+ *  This API should normally not be used directly by the application. The
+ *  only exception is for testing purposes where manual provisioning is
+ *  desired without an actual external provisioner.
+ *
+ *  @param net_key  Network Key
+ *  @param net_idx  Network Key Index
+ *  @param flags    Provisioning Flags
+ *  @param iv_index IV Index
+ *  @param addr     Primary element address
+ *  @param dev_key  Device Key
+ *
+ *  @return Zero on success or (negative) error code otherwise.
+ */
+int bt_mesh_provision(const u8_t net_key[16], u16_t net_idx,
+		      u8_t flags, u32_t iv_index, u16_t addr,
+		      const u8_t dev_key[16]);
+
+/** @brief Provision a Mesh Node using PB-ADV
+ *
+ *  @param uuid               UUID
+ *  @param net_idx            Network Key Index
+ *  @param addr               Address to assign to remote device. If addr is 0,
+ *                            the lowest available address will be chosen.
+ *  @param attention_duration The attention duration to be send to remote device
+ *
+ *  @return Zero on success or (negative) error code otherwise.
+ */
+int bt_mesh_provision_adv(const u8_t uuid[16], u16_t net_idx, u16_t addr,
+			  u8_t attention_duration);
+
+/** @brief Check if the local node has been provisioned.
+ *
+ *  This API can be used to check if the local node has been provisioned
+ *  or not. It can e.g. be helpful to determine if there was a stored
+ *  network in flash, i.e. if the network was restored after calling
+ *  settings_load().
+ *
+ *  @return True if the node is provisioned. False otherwise.
+ */
+bool bt_mesh_is_provisioned(void);
+
 /**
  * @}
  */
@@ -231,6 +323,11 @@ int bt_mesh_prov_disable(bt_mesh_prov_bearer_t bearers);
 
 /* Primary Network Key index */
 #define BT_MESH_NET_PRIMARY                 0x000
+
+/* Added by bouffalo lab
+ * Primary Application Key index 
+ */
+#define BT_MESH_APP_PRIMARY                 0x000
 
 #define BT_MESH_RELAY_DISABLED              0x00
 #define BT_MESH_RELAY_ENABLED               0x01
@@ -307,36 +404,6 @@ int bt_mesh_suspend(void);
  *  @return 0 on success, or (negative) error code on failure.
  */
 int bt_mesh_resume(void);
-
-/** @brief Provision the local Mesh Node.
- *
- *  This API should normally not be used directly by the application. The
- *  only exception is for testing purposes where manual provisioning is
- *  desired without an actual external provisioner.
- *
- *  @param net_key  Network Key
- *  @param net_idx  Network Key Index
- *  @param flags    Provisioning Flags
- *  @param iv_index IV Index
- *  @param addr     Primary element address
- *  @param dev_key  Device Key
- *
- *  @return Zero on success or (negative) error code otherwise.
- */
-int bt_mesh_provision(const u8_t net_key[16], u16_t net_idx,
-		      u8_t flags, u32_t iv_index, u16_t addr,
-		      const u8_t dev_key[16]);
-
-/** @brief Check if the local node has been provisioned.
- *
- *  This API can be used to check if the local node has been provisioned
- *  or not. It can e.g. be helpful to determine if there was a stored
- *  network in flash, i.e. if the network was restored after calling
- *  settings_load().
- *
- *  @return True if the node is provisioned. False otherwise.
- */
-bool bt_mesh_is_provisioned(void);
 
 /** @brief Toggle the IV Update test mode
  *

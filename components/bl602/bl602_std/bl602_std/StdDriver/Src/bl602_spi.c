@@ -183,11 +183,14 @@ BL_Err_Type SPI_Init(SPI_ID_Type spiNo,SPI_CFG_Type* spiCfg)
     tmpVal = BL_SET_REG_BITS_VAL(tmpVal,SPI_CR_SPI_M_CONT_EN,spiCfg->continuousEnable);
     tmpVal = BL_SET_REG_BITS_VAL(tmpVal,SPI_CR_SPI_BYTE_INV,spiCfg->byteSequence);
     tmpVal = BL_SET_REG_BITS_VAL(tmpVal,SPI_CR_SPI_BIT_INV,spiCfg->bitSequence);
-    tmpVal = BL_SET_REG_BITS_VAL(tmpVal,SPI_CR_SPI_SCLK_PH,spiCfg->clkPhaseInv);
+    tmpVal = BL_SET_REG_BITS_VAL(tmpVal,SPI_CR_SPI_SCLK_PH,(spiCfg->clkPhaseInv+1)&1);
     tmpVal = BL_SET_REG_BITS_VAL(tmpVal,SPI_CR_SPI_SCLK_POL,spiCfg->clkPolarity);
     tmpVal = BL_SET_REG_BITS_VAL(tmpVal,SPI_CR_SPI_FRAME_SIZE,spiCfg->frameSize);
     BL_WR_REG(SPIx,SPI_CONFIG,tmpVal);
-    
+
+#ifndef BFLB_USE_HAL_DRIVER
+    //Interrupt_Handler_Register(SPI_IRQn,SPI_IRQHandler);
+#endif
     return SUCCESS;
 }
 
@@ -243,6 +246,55 @@ BL_Err_Type SPI_ClockConfig(SPI_ID_Type spiNo,SPI_ClockCfg_Type *clockCfg)
     
     return SUCCESS;
 }
+
+
+/****************************************************************************//**
+ * @brief  Set SPI SCK Clcok
+ *
+ * @param  spiNo: SPI ID type
+ * @param  clk: Clk
+ *
+ * @return SUCCESS
+ *
+*******************************************************************************/
+BL_Err_Type SPI_SetClock(SPI_ID_Type spiNo,uint32_t clk)
+{
+    uint32_t glb_div = 1,spi_div = 1;
+    uint32_t tmpVal;
+    uint32_t SPIx = spiAddr[spiNo];
+
+    if(clk < 4882){
+        clk = 4882;
+    }
+
+    if(clk > 40000000){
+        clk = 40000000;        
+    }
+
+    if(clk>156250){
+        glb_div = 1;
+        spi_div = 40000000 / clk;
+    }else{
+        spi_div = 256;
+        glb_div = clk >>8;
+    }
+
+    /* Configure length of data phase1/0 and start/stop condition */
+    tmpVal = BL_RD_REG(SPIx,SPI_PRD_0);
+    tmpVal = BL_SET_REG_BITS_VAL(tmpVal,SPI_CR_SPI_PRD_S,spi_div-1);
+    tmpVal = BL_SET_REG_BITS_VAL(tmpVal,SPI_CR_SPI_PRD_P,spi_div-1);
+    tmpVal = BL_SET_REG_BITS_VAL(tmpVal,SPI_CR_SPI_PRD_D_PH_0,spi_div-1);
+    tmpVal = BL_SET_REG_BITS_VAL(tmpVal,SPI_CR_SPI_PRD_D_PH_1,spi_div-1);
+    BL_WR_REG(SPIx,SPI_PRD_0,tmpVal);
+    
+    tmpVal = BL_RD_REG(SPIx,SPI_PRD_1);
+    BL_WR_REG(SPIx,SPI_PRD_1,BL_SET_REG_BITS_VAL(tmpVal,SPI_CR_SPI_PRD_I,spi_div-1));
+
+    GLB_Set_SPI_CLK(ENABLE,glb_div-1);
+
+    return SUCCESS;
+}
+
 
 /****************************************************************************//**
  * @brief  SPI configure fifo function
@@ -610,6 +662,7 @@ BL_Err_Type SPI_Send_8bits(SPI_ID_Type spiNo,uint8_t *buff,uint32_t length,SPI_T
 {
     uint32_t tmpVal;
     uint32_t txLen = 0;
+    uint32_t rData;
     uint32_t SPIx = spiAddr[spiNo];
     uint32_t timeoutCnt = SPI_TX_TIMEOUT_COUNT;
     
@@ -631,10 +684,14 @@ BL_Err_Type SPI_Send_8bits(SPI_ID_Type spiNo,uint8_t *buff,uint32_t length,SPI_T
     tmpVal = BL_SET_REG_BIT(tmpVal,SPI_RX_FIFO_CLR);
     BL_WR_REG(SPIx,SPI_FIFO_CONFIG_0,tmpVal);
     
-    /* Send 8-bit datas */
-    for(txLen=0;txLen<length;txLen++){
+    /* Fill tx fifo */
+    tmpVal = length<=(SPI_TX_FIFO_SIZE)?length:SPI_TX_FIFO_SIZE;
+    for(txLen=0;txLen<tmpVal;txLen++){
         BL_WR_REG(SPIx,SPI_FIFO_WDATA,(uint32_t)buff[txLen]);
-        
+    }
+    
+    /* Wait receive data and send the rest of the data */
+    for(;txLen<length;txLen++){
         timeoutCnt = SPI_RX_TIMEOUT_COUNT;
         while(SPI_GetRxFifoCount(spiNo) == 0){
             if(timeoutType){
@@ -644,7 +701,22 @@ BL_Err_Type SPI_Send_8bits(SPI_ID_Type spiNo,uint8_t *buff,uint32_t length,SPI_T
                 }
             }
         }
-        tmpVal = BL_RD_REG(SPIx,SPI_FIFO_RDATA);
+        rData |= BL_RD_REG(SPIx,SPI_FIFO_RDATA);
+        BL_WR_REG(SPIx,SPI_FIFO_WDATA,(uint32_t)buff[txLen]);
+    }
+    
+    /* Wait receive the rest of the data */
+    for(txLen=0;txLen<tmpVal;txLen++){
+        timeoutCnt = SPI_RX_TIMEOUT_COUNT;
+        while(SPI_GetRxFifoCount(spiNo) == 0){
+            if(timeoutType){
+                timeoutCnt--;
+                if(timeoutCnt ==0){
+                    return TIMEOUT;
+                }
+            }
+        }
+        rData |= BL_RD_REG(SPIx,SPI_FIFO_RDATA);
     }
     
     return SUCCESS;
@@ -665,6 +737,7 @@ BL_Err_Type SPI_Send_16bits(SPI_ID_Type spiNo,uint16_t *buff,uint32_t length,SPI
 {
     uint32_t tmpVal;
     uint32_t txLen = 0;
+    uint32_t rData;
     uint32_t SPIx = spiAddr[spiNo];
     uint32_t timeoutCnt = SPI_TX_TIMEOUT_COUNT;
     
@@ -686,10 +759,14 @@ BL_Err_Type SPI_Send_16bits(SPI_ID_Type spiNo,uint16_t *buff,uint32_t length,SPI
     tmpVal = BL_SET_REG_BIT(tmpVal,SPI_RX_FIFO_CLR);
     BL_WR_REG(SPIx,SPI_FIFO_CONFIG_0,tmpVal);
     
-    /* Send 16-bit datas */
-    for(txLen=0;txLen<length;txLen++){
+    /* Fill tx fifo */
+    tmpVal = length<=(SPI_TX_FIFO_SIZE)?length:SPI_TX_FIFO_SIZE;
+    for(txLen=0;txLen<tmpVal;txLen++){
         BL_WR_REG(SPIx,SPI_FIFO_WDATA,(uint32_t)buff[txLen]);
-        
+    }
+    
+    /* Wait receive data and send the rest of the data */
+    for(;txLen<length;txLen++){
         timeoutCnt = SPI_RX_TIMEOUT_COUNT;
         while(SPI_GetRxFifoCount(spiNo) == 0){
             if(timeoutType){
@@ -699,7 +776,22 @@ BL_Err_Type SPI_Send_16bits(SPI_ID_Type spiNo,uint16_t *buff,uint32_t length,SPI
                 }
             }
         }
-        tmpVal = BL_RD_REG(SPIx,SPI_FIFO_RDATA);
+        rData |= BL_RD_REG(SPIx,SPI_FIFO_RDATA);
+        BL_WR_REG(SPIx,SPI_FIFO_WDATA,(uint32_t)buff[txLen]);
+    }
+    
+    /* Wait receive the rest of the data */
+    for(txLen=0;txLen<tmpVal;txLen++){
+        timeoutCnt = SPI_RX_TIMEOUT_COUNT;
+        while(SPI_GetRxFifoCount(spiNo) == 0){
+            if(timeoutType){
+                timeoutCnt--;
+                if(timeoutCnt ==0){
+                    return TIMEOUT;
+                }
+            }
+        }
+        rData |= BL_RD_REG(SPIx,SPI_FIFO_RDATA);
     }
     
     return SUCCESS;
@@ -720,6 +812,7 @@ BL_Err_Type SPI_Send_24bits(SPI_ID_Type spiNo,uint32_t *buff,uint32_t length,SPI
 {
     uint32_t tmpVal;
     uint32_t txLen = 0;
+    uint32_t rData;
     uint32_t SPIx = spiAddr[spiNo];
     uint32_t timeoutCnt = SPI_TX_TIMEOUT_COUNT;
     
@@ -741,10 +834,14 @@ BL_Err_Type SPI_Send_24bits(SPI_ID_Type spiNo,uint32_t *buff,uint32_t length,SPI
     tmpVal = BL_SET_REG_BIT(tmpVal,SPI_RX_FIFO_CLR);
     BL_WR_REG(SPIx,SPI_FIFO_CONFIG_0,tmpVal);
     
-    /* Send 24-bit datas */
-    for(txLen=0;txLen<length;txLen++){
+    /* Fill tx fifo */
+    tmpVal = length<=(SPI_TX_FIFO_SIZE)?length:SPI_TX_FIFO_SIZE;
+    for(txLen=0;txLen<tmpVal;txLen++){
         BL_WR_REG(SPIx,SPI_FIFO_WDATA,buff[txLen]);
-        
+    }
+    
+    /* Wait receive data and send the rest of the data */
+    for(;txLen<length;txLen++){
         timeoutCnt = SPI_RX_TIMEOUT_COUNT;
         while(SPI_GetRxFifoCount(spiNo) == 0){
             if(timeoutType){
@@ -754,7 +851,22 @@ BL_Err_Type SPI_Send_24bits(SPI_ID_Type spiNo,uint32_t *buff,uint32_t length,SPI
                 }
             }
         }
-        tmpVal = BL_RD_REG(SPIx,SPI_FIFO_RDATA);
+        rData |= BL_RD_REG(SPIx,SPI_FIFO_RDATA);
+        BL_WR_REG(SPIx,SPI_FIFO_WDATA,buff[txLen]);
+    }
+    
+    /* Wait receive the rest of the data */
+    for(txLen=0;txLen<tmpVal;txLen++){
+        timeoutCnt = SPI_RX_TIMEOUT_COUNT;
+        while(SPI_GetRxFifoCount(spiNo) == 0){
+            if(timeoutType){
+                timeoutCnt--;
+                if(timeoutCnt ==0){
+                    return TIMEOUT;
+                }
+            }
+        }
+        rData |= BL_RD_REG(SPIx,SPI_FIFO_RDATA);
     }
     
     return SUCCESS;
@@ -775,6 +887,7 @@ BL_Err_Type SPI_Send_32bits(SPI_ID_Type spiNo,uint32_t *buff,uint32_t length,SPI
 {
     uint32_t tmpVal;
     uint32_t txLen = 0;
+    uint32_t rData;
     uint32_t SPIx = spiAddr[spiNo];
     uint32_t timeoutCnt = SPI_TX_TIMEOUT_COUNT;
     
@@ -796,10 +909,14 @@ BL_Err_Type SPI_Send_32bits(SPI_ID_Type spiNo,uint32_t *buff,uint32_t length,SPI
     tmpVal = BL_SET_REG_BIT(tmpVal,SPI_RX_FIFO_CLR);
     BL_WR_REG(SPIx,SPI_FIFO_CONFIG_0,tmpVal);
     
-    /* Send 32-bit datas */
-    for(txLen=0;txLen<length;txLen++){
+    /* Fill tx fifo */
+    tmpVal = length<=(SPI_TX_FIFO_SIZE)?length:SPI_TX_FIFO_SIZE;
+    for(txLen=0;txLen<tmpVal;txLen++){
         BL_WR_REG(SPIx,SPI_FIFO_WDATA,buff[txLen]);
-        
+    }
+    
+    /* Wait receive data and send the rest of the data */
+    for(;txLen<length;txLen++){
         timeoutCnt = SPI_RX_TIMEOUT_COUNT;
         while(SPI_GetRxFifoCount(spiNo) == 0){
             if(timeoutType){
@@ -809,7 +926,22 @@ BL_Err_Type SPI_Send_32bits(SPI_ID_Type spiNo,uint32_t *buff,uint32_t length,SPI
                 }
             }
         }
-        tmpVal = BL_RD_REG(SPIx,SPI_FIFO_RDATA);
+        rData |= BL_RD_REG(SPIx,SPI_FIFO_RDATA);
+        BL_WR_REG(SPIx,SPI_FIFO_WDATA,buff[txLen]);
+    }
+    
+    /* Wait receive the rest of the data */
+    for(txLen=0;txLen<tmpVal;txLen++){
+        timeoutCnt = SPI_RX_TIMEOUT_COUNT;
+        while(SPI_GetRxFifoCount(spiNo) == 0){
+            if(timeoutType){
+                timeoutCnt--;
+                if(timeoutCnt ==0){
+                    return TIMEOUT;
+                }
+            }
+        }
+        rData |= BL_RD_REG(SPIx,SPI_FIFO_RDATA);
     }
     
     return SUCCESS;
@@ -851,10 +983,14 @@ BL_Err_Type SPI_Recv_8bits(SPI_ID_Type spiNo,uint8_t *buff,uint32_t length,SPI_T
     tmpVal = BL_SET_REG_BIT(tmpVal,SPI_RX_FIFO_CLR);
     BL_WR_REG(SPIx,SPI_FIFO_CONFIG_0,tmpVal);
     
-    /* Receive 8-bit datas */
-    while(rxLen<length){
+    /* Fill tx fifo with 0 */
+    tmpVal = length<=(SPI_TX_FIFO_SIZE)?length:SPI_TX_FIFO_SIZE;
+    for(rxLen=0;rxLen<tmpVal;rxLen++){
         BL_WR_REG(SPIx,SPI_FIFO_WDATA,0);
-        
+    }
+    
+    /* Wait receive data and send the rest of the data 0 */
+    for(rxLen=0;rxLen<length-tmpVal;rxLen++){
         timeoutCnt = SPI_RX_TIMEOUT_COUNT;
         while(SPI_GetRxFifoCount(spiNo) == 0){
             if(timeoutType){
@@ -864,7 +1000,22 @@ BL_Err_Type SPI_Recv_8bits(SPI_ID_Type spiNo,uint8_t *buff,uint32_t length,SPI_T
                 }
             }
         }
-        buff[rxLen++] = (uint8_t)(BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xff);
+        buff[rxLen] = (uint8_t)(BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xff);
+        BL_WR_REG(SPIx,SPI_FIFO_WDATA,0);
+    }
+    
+    /* Wait receive the rest of the data */
+    for(;rxLen<length;rxLen++){
+        timeoutCnt = SPI_RX_TIMEOUT_COUNT;
+        while(SPI_GetRxFifoCount(spiNo) == 0){
+            if(timeoutType){
+                timeoutCnt--;
+                if(timeoutCnt ==0){
+                    return TIMEOUT;
+                }
+            }
+        }
+        buff[rxLen] = (uint8_t)(BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xff);
     }
     
     return SUCCESS;
@@ -906,10 +1057,29 @@ BL_Err_Type SPI_Recv_16bits(SPI_ID_Type spiNo,uint16_t *buff,uint32_t length,SPI
     tmpVal = BL_SET_REG_BIT(tmpVal,SPI_RX_FIFO_CLR);
     BL_WR_REG(SPIx,SPI_FIFO_CONFIG_0,tmpVal);
     
-    /* Receive 16-bit datas */
-    while(rxLen<length){
+    /* Fill tx fifo with 0 */
+    tmpVal = length<=(SPI_TX_FIFO_SIZE)?length:SPI_TX_FIFO_SIZE;
+    for(rxLen=0;rxLen<tmpVal;rxLen++){
         BL_WR_REG(SPIx,SPI_FIFO_WDATA,0);
-        
+    }
+    
+    /* Wait receive data and send the rest of the data 0 */
+    for(rxLen=0;rxLen<length-tmpVal;rxLen++){
+        timeoutCnt = SPI_RX_TIMEOUT_COUNT;
+        while(SPI_GetRxFifoCount(spiNo) == 0){
+            if(timeoutType){
+                timeoutCnt--;
+                if(timeoutCnt ==0){
+                    return TIMEOUT;
+                }
+            }
+        }
+        buff[rxLen++] = (uint16_t)(BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xffff);
+        BL_WR_REG(SPIx,SPI_FIFO_WDATA,0);
+    }
+    
+    /* Wait receive the rest of the data */
+    for(;rxLen<length;rxLen++){
         timeoutCnt = SPI_RX_TIMEOUT_COUNT;
         while(SPI_GetRxFifoCount(spiNo) == 0){
             if(timeoutType){
@@ -961,10 +1131,29 @@ BL_Err_Type SPI_Recv_24bits(SPI_ID_Type spiNo,uint32_t *buff,uint32_t length,SPI
     tmpVal = BL_SET_REG_BIT(tmpVal,SPI_RX_FIFO_CLR);
     BL_WR_REG(SPIx,SPI_FIFO_CONFIG_0,tmpVal);
     
-    /* Receive 24-bit datas */
-    while(rxLen<length){
+    /* Fill tx fifo with 0 */
+    tmpVal = length<=(SPI_TX_FIFO_SIZE)?length:SPI_TX_FIFO_SIZE;
+    for(rxLen=0;rxLen<tmpVal;rxLen++){
         BL_WR_REG(SPIx,SPI_FIFO_WDATA,0);
-        
+    }
+    
+    /* Wait receive data and send the rest of the data 0 */
+    for(rxLen=0;rxLen<length-tmpVal;rxLen++){
+        timeoutCnt = SPI_RX_TIMEOUT_COUNT;
+        while(SPI_GetRxFifoCount(spiNo) == 0){
+            if(timeoutType){
+                timeoutCnt--;
+                if(timeoutCnt ==0){
+                    return TIMEOUT;
+                }
+            }
+        }
+        buff[rxLen++] = BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xffffff;
+        BL_WR_REG(SPIx,SPI_FIFO_WDATA,0);
+    }
+    
+    /* Wait receive the rest of the data */
+    for(;rxLen<length;rxLen++){
         timeoutCnt = SPI_RX_TIMEOUT_COUNT;
         while(SPI_GetRxFifoCount(spiNo) == 0){
             if(timeoutType){
@@ -1016,10 +1205,29 @@ BL_Err_Type SPI_Recv_32bits(SPI_ID_Type spiNo,uint32_t *buff,uint32_t length,SPI
     tmpVal = BL_SET_REG_BIT(tmpVal,SPI_RX_FIFO_CLR);
     BL_WR_REG(SPIx,SPI_FIFO_CONFIG_0,tmpVal);
     
-    /* Receive 32-bit datas */
-    while(rxLen<length){
+    /* Fill tx fifo with 0 */
+    tmpVal = length<=(SPI_TX_FIFO_SIZE)?length:SPI_TX_FIFO_SIZE;
+    for(rxLen=0;rxLen<tmpVal;rxLen++){
         BL_WR_REG(SPIx,SPI_FIFO_WDATA,0);
-        
+    }
+    
+    /* Wait receive data and send the rest of the data 0 */
+    for(rxLen=0;rxLen<length-tmpVal;rxLen++){
+        timeoutCnt = SPI_RX_TIMEOUT_COUNT;
+        while(SPI_GetRxFifoCount(spiNo) == 0){
+            if(timeoutType){
+                timeoutCnt--;
+                if(timeoutCnt ==0){
+                    return TIMEOUT;
+                }
+            }
+        }
+        buff[rxLen++] = BL_RD_REG(SPIx,SPI_FIFO_RDATA);
+        BL_WR_REG(SPIx,SPI_FIFO_WDATA,0);
+    }
+    
+    /* Wait receive the rest of the data */
+    for(;rxLen<length;rxLen++){
         timeoutCnt = SPI_RX_TIMEOUT_COUNT;
         while(SPI_GetRxFifoCount(spiNo) == 0){
             if(timeoutType){
@@ -1072,10 +1280,14 @@ BL_Err_Type SPI_SendRecv_8bits(SPI_ID_Type spiNo,uint8_t *sendBuff,uint8_t *recv
     tmpVal = BL_SET_REG_BIT(tmpVal,SPI_RX_FIFO_CLR);
     BL_WR_REG(SPIx,SPI_FIFO_CONFIG_0,tmpVal);
     
-    /* Send and receive 8-bit datas */
-    for(txLen=0;txLen<length;txLen++){
+    /* Fill tx fifo */
+    tmpVal = length<=(SPI_TX_FIFO_SIZE)?length:SPI_TX_FIFO_SIZE;
+    for(txLen=0;txLen<tmpVal;txLen++){
         BL_WR_REG(SPIx,SPI_FIFO_WDATA,(uint32_t)sendBuff[txLen]);
-        
+    }
+    
+    /* Wait receive data and send the rest of the data */
+    for(;txLen<length;txLen++){
         timeoutCnt = SPI_RX_TIMEOUT_COUNT;
         while(SPI_GetRxFifoCount(spiNo) == 0){
             if(timeoutType){
@@ -1085,7 +1297,22 @@ BL_Err_Type SPI_SendRecv_8bits(SPI_ID_Type spiNo,uint8_t *sendBuff,uint8_t *recv
                 }
             }
         }
-        recvBuff[txLen] = (uint8_t)(BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xff);
+        recvBuff[txLen-tmpVal] = (uint8_t)(BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xff);
+        BL_WR_REG(SPIx,SPI_FIFO_WDATA,(uint32_t)sendBuff[txLen]);
+    }
+    
+    /* Wait receive the rest of the data */
+    for(txLen=0;txLen<tmpVal;txLen++){
+        timeoutCnt = SPI_RX_TIMEOUT_COUNT;
+        while(SPI_GetRxFifoCount(spiNo) == 0){
+            if(timeoutType){
+                timeoutCnt--;
+                if(timeoutCnt ==0){
+                    return TIMEOUT;
+                }
+            }
+        }
+        recvBuff[length-tmpVal+txLen] = (uint8_t)(BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xff);
     }
     
     return SUCCESS;
@@ -1128,10 +1355,14 @@ BL_Err_Type SPI_SendRecv_16bits(SPI_ID_Type spiNo,uint16_t *sendBuff,uint16_t *r
     tmpVal = BL_SET_REG_BIT(tmpVal,SPI_RX_FIFO_CLR);
     BL_WR_REG(SPIx,SPI_FIFO_CONFIG_0,tmpVal);
     
-    /* Send and receive 16-bit datas */
-    for(txLen=0;txLen<length;txLen++){
+    /* Fill tx fifo */
+    tmpVal = length<=(SPI_TX_FIFO_SIZE)?length:SPI_TX_FIFO_SIZE;
+    for(txLen=0;txLen<tmpVal;txLen++){
         BL_WR_REG(SPIx,SPI_FIFO_WDATA,(uint32_t)sendBuff[txLen]);
-        
+    }
+    
+    /* Wait receive data and send the rest of the data */
+    for(;txLen<length;txLen++){
         timeoutCnt = SPI_RX_TIMEOUT_COUNT;
         while(SPI_GetRxFifoCount(spiNo) == 0){
             if(timeoutType){
@@ -1141,7 +1372,22 @@ BL_Err_Type SPI_SendRecv_16bits(SPI_ID_Type spiNo,uint16_t *sendBuff,uint16_t *r
                 }
             }
         }
-        recvBuff[txLen] = (uint16_t)(BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xffff);
+        recvBuff[txLen-tmpVal] = (uint16_t)(BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xffff);
+        BL_WR_REG(SPIx,SPI_FIFO_WDATA,(uint32_t)sendBuff[txLen]);
+    }
+    
+    /* Wait receive the rest of the data */
+    for(txLen=0;txLen<tmpVal;txLen++){
+        timeoutCnt = SPI_RX_TIMEOUT_COUNT;
+        while(SPI_GetRxFifoCount(spiNo) == 0){
+            if(timeoutType){
+                timeoutCnt--;
+                if(timeoutCnt ==0){
+                    return TIMEOUT;
+                }
+            }
+        }
+        recvBuff[length-tmpVal+txLen] = (uint16_t)(BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xffff);
     }
     
     return SUCCESS;
@@ -1184,10 +1430,14 @@ BL_Err_Type SPI_SendRecv_24bits(SPI_ID_Type spiNo,uint32_t *sendBuff,uint32_t *r
     tmpVal = BL_SET_REG_BIT(tmpVal,SPI_RX_FIFO_CLR);
     BL_WR_REG(SPIx,SPI_FIFO_CONFIG_0,tmpVal);
     
-    /* Send and receive 24-bit datas */
-    for(txLen=0;txLen<length;txLen++){
+    /* Fill tx fifo */
+    tmpVal = length<=(SPI_TX_FIFO_SIZE)?length:SPI_TX_FIFO_SIZE;
+    for(txLen=0;txLen<tmpVal;txLen++){
         BL_WR_REG(SPIx,SPI_FIFO_WDATA,sendBuff[txLen]);
-        
+    }
+    
+    /* Wait receive data and send the rest of the data */
+    for(;txLen<length;txLen++){
         timeoutCnt = SPI_RX_TIMEOUT_COUNT;
         while(SPI_GetRxFifoCount(spiNo) == 0){
             if(timeoutType){
@@ -1197,7 +1447,22 @@ BL_Err_Type SPI_SendRecv_24bits(SPI_ID_Type spiNo,uint32_t *sendBuff,uint32_t *r
                 }
             }
         }
-        recvBuff[txLen] = BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xffffff;
+        recvBuff[txLen-tmpVal] = BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xffffff;
+        BL_WR_REG(SPIx,SPI_FIFO_WDATA,sendBuff[txLen]);
+    }
+    
+    /* Wait receive the rest of the data */
+    for(txLen=0;txLen<tmpVal;txLen++){
+        timeoutCnt = SPI_RX_TIMEOUT_COUNT;
+        while(SPI_GetRxFifoCount(spiNo) == 0){
+            if(timeoutType){
+                timeoutCnt--;
+                if(timeoutCnt ==0){
+                    return TIMEOUT;
+                }
+            }
+        }
+        recvBuff[length-tmpVal+txLen] = BL_RD_REG(SPIx,SPI_FIFO_RDATA)&0xffffff;
     }
     
     return SUCCESS;
@@ -1240,10 +1505,14 @@ BL_Err_Type SPI_SendRecv_32bits(SPI_ID_Type spiNo,uint32_t *sendBuff,uint32_t *r
     tmpVal = BL_SET_REG_BIT(tmpVal,SPI_RX_FIFO_CLR);
     BL_WR_REG(SPIx,SPI_FIFO_CONFIG_0,tmpVal);
     
-    /* Send and receive 32-bit datas */
-    for(txLen=0;txLen<length;txLen++){
+    /* Fill tx fifo */
+    tmpVal = length<=(SPI_TX_FIFO_SIZE)?length:SPI_TX_FIFO_SIZE;
+    for(txLen=0;txLen<tmpVal;txLen++){
         BL_WR_REG(SPIx,SPI_FIFO_WDATA,sendBuff[txLen]);
-        
+    }
+    
+    /* Wait receive data and send the rest of the data */
+    for(;txLen<length;txLen++){
         timeoutCnt = SPI_RX_TIMEOUT_COUNT;
         while(SPI_GetRxFifoCount(spiNo) == 0){
             if(timeoutType){
@@ -1253,7 +1522,22 @@ BL_Err_Type SPI_SendRecv_32bits(SPI_ID_Type spiNo,uint32_t *sendBuff,uint32_t *r
                 }
             }
         }
-        recvBuff[txLen] = BL_RD_REG(SPIx,SPI_FIFO_RDATA);
+        recvBuff[txLen-tmpVal] = BL_RD_REG(SPIx,SPI_FIFO_RDATA);
+        BL_WR_REG(SPIx,SPI_FIFO_WDATA,sendBuff[txLen]);
+    }
+    
+    /* Wait receive the rest of the data */
+    for(txLen=0;txLen<tmpVal;txLen++){
+        timeoutCnt = SPI_RX_TIMEOUT_COUNT;
+        while(SPI_GetRxFifoCount(spiNo) == 0){
+            if(timeoutType){
+                timeoutCnt--;
+                if(timeoutCnt ==0){
+                    return TIMEOUT;
+                }
+            }
+        }
+        recvBuff[length-tmpVal+txLen] = BL_RD_REG(SPIx,SPI_FIFO_RDATA);
     }
     
     return SUCCESS;
@@ -1413,7 +1697,7 @@ BL_Sts_Type SPI_GetFifoStatus(SPI_ID_Type spiNo,SPI_FifoStatus_Type fifoSts)
  *
 *******************************************************************************/
 #ifndef BL602_USE_HAL_DRIVER
-void __IRQ SPI_IRQHandler(void)
+void SPI_IRQHandler(void)
 {
     SPI_IntHandler(SPI_ID_0);
 }

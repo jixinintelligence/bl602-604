@@ -50,22 +50,27 @@
 
 #include <bl602_glb.h>
 #include <bl602_hbn.h>
+#include "bl602_adc.h"
 
 #include <bl_sys.h>
 #include <bl_uart.h>
 #include <bl_chip.h>
 #include <bl_wifi.h>
+#include <hal_wifi.h>
 #include <bl_sec.h>
 #include <bl_cks.h>
 #include <bl_irq.h>
+#include <bl_timer.h>
 #include <bl_dma.h>
 #include <bl_gpio_cli.h>
 #include <bl_wdt_cli.h>
 #include <hal_uart.h>
 #include <hal_sys.h>
 #include <hal_gpio.h>
+#include <hal_hbn.h>
 #include <hal_boot2.h>
 #include <hal_board.h>
+#include <hal_button.h>
 #include <looprt.h>
 #include <loopset.h>
 #include <sntp.h>
@@ -74,12 +79,16 @@
 #include <bl_romfs.h>
 #include <fdt.h>
 
-#include <easyflash.h>
+//#include <easyflash.h>
 #include <bl60x_fw_api.h>
 #include <wifi_mgmr_ext.h>
 #include <utils_log.h>
 #include <libfdt.h>
 #include <blog.h>
+#include "ble_lib_api.h"
+#include "hal_pds.h"
+#include "bl_rtc.h"
+#include "utils_string.h"
 
 #define TASK_PRIORITY_FW            ( 30 )
 #define mainHELLO_TASK_PRIORITY     ( 20 )
@@ -98,6 +107,10 @@
 #define WIFI_AP_PSM_INFO_GW_MAC         "conf_ap_gw_mac"
 #define CLI_CMD_AUTOSTART1              "cmd_auto1"
 #define CLI_CMD_AUTOSTART2              "cmd_auto2"
+
+#define TIME_5MS_IN_32768CYCLE  (164) // (5000/(1000000/32768))
+
+bool pds_start = false;
 
 extern void ble_stack_start(void);
 
@@ -138,11 +151,77 @@ void vApplicationMallocFailedHook(void)
 
 void vApplicationIdleHook(void)
 {
-    __asm volatile(
-            "   wfi     "
-    );
-    /*empty*/
+    if(!pds_start){
+        __asm volatile(
+                "   wfi     "
+        );
+        /*empty*/
+    }
 }
+
+#if ( configUSE_TICKLESS_IDLE != 0 )
+void vApplicationSleep( TickType_t xExpectedIdleTime_ms )
+{
+#if defined(CFG_BLE_PDS)
+    int32_t bleSleepDuration_32768cycles = 0;
+    int32_t expectedIdleTime_32768cycles = 0;
+    eSleepModeStatus eSleepStatus;
+    bool freertos_max_idle = false;
+
+    if (pds_start == 0)
+        return;
+
+    if(xExpectedIdleTime_ms + xTaskGetTickCount() == portMAX_DELAY){
+        freertos_max_idle = true;
+    }else{   
+        xExpectedIdleTime_ms -= 1;
+        expectedIdleTime_32768cycles = 32768 * xExpectedIdleTime_ms / 1000;
+    }
+
+    if((!freertos_max_idle)&&(expectedIdleTime_32768cycles < TIME_5MS_IN_32768CYCLE)){
+        return;
+    }
+
+    /*Disable mtimer interrrupt*/
+    *(volatile uint8_t*)configCLIC_TIMER_ENABLE_ADDRESS = 0;
+
+    eSleepStatus = eTaskConfirmSleepModeStatus();
+    if(eSleepStatus == eAbortSleep || ble_controller_sleep_is_ongoing())
+    {
+        /*A task has been moved out of the Blocked state since this macro was
+        executed, or a context siwth is being held pending.Restart the tick 
+        and exit the critical section. */
+        /*Enable mtimer interrrupt*/
+        *(volatile uint8_t*)configCLIC_TIMER_ENABLE_ADDRESS = 1;
+        //printf("%s:not do ble sleep\r\n", __func__);
+        return;
+    }
+
+    bleSleepDuration_32768cycles = ble_controller_sleep();
+
+	if(bleSleepDuration_32768cycles < TIME_5MS_IN_32768CYCLE)
+    {
+        /*BLE controller does not allow sleep.  Do not enter a sleep state.Restart the tick 
+        and exit the critical section. */
+        /*Enable mtimer interrrupt*/
+        //printf("%s:not do pds sleep\r\n", __func__);
+        *(volatile uint8_t*)configCLIC_TIMER_ENABLE_ADDRESS = 1;
+    }
+    else
+    {
+        printf("%s:bleSleepDuration_32768cycles=%ld\r\n", __func__, bleSleepDuration_32768cycles);
+        if(eSleepStatus == eStandardSleep && ((!freertos_max_idle) && (expectedIdleTime_32768cycles < bleSleepDuration_32768cycles)))
+        {
+           hal_pds_enter_with_time_compensation(1, expectedIdleTime_32768cycles - 40);//40);//20);
+        }
+        else
+        {
+           hal_pds_enter_with_time_compensation(1, bleSleepDuration_32768cycles - 40);//40);//20);
+        }
+    }
+#endif
+}
+#endif
 
 static void proc_hellow_entry(void *pvParameters)
 {
@@ -225,7 +304,7 @@ static void _connect_wifi()
     char pmk[66], bssid[32], chan[10];
     char ssid[33], password[66];
     char val_buf[66];
-    char val_len = sizeof(val_buf) - 1;
+//    char val_len = sizeof(val_buf) - 1;
     uint8_t mac[6];
     uint8_t band = 0;
     uint16_t freq = 0;
@@ -247,7 +326,7 @@ static void _connect_wifi()
     memset(chan, 0, sizeof(chan));
 
     memset(val_buf, 0, sizeof(val_buf));
-    ef_get_env_blob((const char *)WIFI_AP_PSM_INFO_SSID, val_buf, val_len, NULL);
+//    ef_get_env_blob((const char *)WIFI_AP_PSM_INFO_SSID, val_buf, val_len, NULL);
     if (val_buf[0]) {
         /*We believe that when ssid is set, wifi_confi is OK*/
         strncpy(ssid, val_buf, sizeof(ssid) - 1);
@@ -263,13 +342,13 @@ static void _connect_wifi()
     }
 
     memset(val_buf, 0, sizeof(val_buf));
-    ef_get_env_blob((const char *)WIFI_AP_PSM_INFO_PASSWORD, val_buf, val_len, NULL);
+//    ef_get_env_blob((const char *)WIFI_AP_PSM_INFO_PASSWORD, val_buf, val_len, NULL);
     if (val_buf[0]) {
         strncpy(password, val_buf, sizeof(password) - 1);
     }
 
     memset(val_buf, 0, sizeof(val_buf));
-    ef_get_env_blob((const char *)WIFI_AP_PSM_INFO_PMK, val_buf, val_len, NULL);
+//    ef_get_env_blob((const char *)WIFI_AP_PSM_INFO_PMK, val_buf, val_len, NULL);
     if (val_buf[0]) {
         strncpy(pmk, val_buf, sizeof(pmk) - 1);
     }
@@ -286,18 +365,18 @@ static void _connect_wifi()
                 strlen(ssid),
                 pmk
         );
-        ef_set_env(WIFI_AP_PSM_INFO_PMK, pmk);
-        ef_save_env();
+//        ef_set_env(WIFI_AP_PSM_INFO_PMK, pmk);
+//        ef_save_env();
     }
     memset(val_buf, 0, sizeof(val_buf));
-    ef_get_env_blob((const char *)WIFI_AP_PSM_INFO_CHANNEL, val_buf, val_len, NULL);
+//    ef_get_env_blob((const char *)WIFI_AP_PSM_INFO_CHANNEL, val_buf, val_len, NULL);
     if (val_buf[0]) {
         strncpy(chan, val_buf, sizeof(chan) - 1);
         printf("connect wifi channel = %s\r\n", chan);
         _chan_str_to_hex(&band, &freq, chan);
     }
     memset(val_buf, 0, sizeof(val_buf));
-    ef_get_env_blob((const char *)WIFI_AP_PSM_INFO_BSSID, val_buf, val_len, NULL);
+//    ef_get_env_blob((const char *)WIFI_AP_PSM_INFO_BSSID, val_buf, val_len, NULL);
     if (val_buf[0]) {
         strncpy(bssid, val_buf, sizeof(bssid) - 1);
         printf("connect wifi bssid = %s\r\n", bssid);
@@ -334,6 +413,32 @@ static void _connect_wifi()
     wifi_mgmr_sta_connect(wifi_interface, ssid, password, pmk, mac, band, freq);
 }
 
+#if defined(CONFIG_BT_MESH_SYNC)
+typedef struct _wifi_item {
+    char ssid[32];
+    uint32_t ssid_len;
+    uint8_t bssid[6];
+    uint8_t channel;
+    uint8_t auth;
+    int8_t rssi;
+} _wifi_item_t;
+
+struct _wifi_conn {
+    char ssid[32];
+    char ssid_tail[1];
+    char pask[64];
+};
+
+struct _wifi_state {
+    char ip[16];
+    char gw[16];
+    char mask[16];
+    char ssid[32];
+    char ssid_tail[1];
+    uint8_t bssid[6];
+    uint8_t state;
+};
+#endif /* CONFIG_BT_MESH_SYNC */
 static void wifi_sta_connect(char *ssid, char *password)
 {
     wifi_interface_t wifi_interface;
@@ -341,7 +446,65 @@ static void wifi_sta_connect(char *ssid, char *password)
     wifi_interface = wifi_mgmr_sta_enable();
     wifi_mgmr_sta_connect(wifi_interface, ssid, password, NULL, NULL, 0, 0);
 }
+#if defined(CONFIG_BT_MESH_SYNC)
+static void scan_item_cb(wifi_mgmr_ap_item_t *env, uint32_t *param1, wifi_mgmr_ap_item_t *item)
+{
+    _wifi_item_t wifi_item;
+    void (*complete)(void *) = (void (*)(void *))param1;
 
+    wifi_item.auth = item->auth;
+    wifi_item.rssi = item->rssi;
+    wifi_item.channel = item->channel;
+    wifi_item.ssid_len = item->ssid_len;
+    memcpy(wifi_item.ssid, item->ssid, sizeof(wifi_item.ssid));
+    memcpy(wifi_item.bssid, item->bssid, sizeof(wifi_item.bssid));
+
+    if (complete) {
+        complete(&wifi_item);
+    }
+}
+
+static void scan_complete_cb(void *p_arg, void *param)
+{
+    wifi_mgmr_scan_ap_all(NULL, p_arg, scan_item_cb);
+}
+
+static void wifiprov_scan(void *p_arg)
+{
+    wifi_mgmr_scan(p_arg, scan_complete_cb);
+}
+
+static void wifiprov_wifi_state_get(void *p_arg)
+{
+    int tmp_state;
+    wifi_mgmr_sta_connect_ind_stat_info_t info;
+    ip4_addr_t ip, gw, mask;
+    struct _wifi_state state;
+    void (*state_get_cb)(void *) = (void (*)(void *))p_arg;
+
+    memset(&state, 0, sizeof(state));
+    memset(&info, 0, sizeof(info));
+    wifi_mgmr_state_get(&tmp_state);
+    wifi_mgmr_sta_ip_get(&ip.addr, &gw.addr, &mask.addr);
+    wifi_mgmr_sta_connect_ind_stat_get(&info);
+
+    state.state = tmp_state;
+    strcpy(state.ip, ip4addr_ntoa(&ip));
+    strcpy(state.mask, ip4addr_ntoa(&mask));
+    strcpy(state.gw, ip4addr_ntoa(&gw));
+    memcpy(state.ssid, info.ssid, sizeof(state.ssid));
+    memcpy(state.bssid, info.bssid, sizeof(state.bssid));
+    state.ssid_tail[0] = 0;
+
+    printf("IP  :%s \r\n", state.ip);
+    printf("GW  :%s \r\n", state.gw);
+    printf("MASK:%s \r\n", state.mask);
+
+    if (state_get_cb) {
+        state_get_cb(&state);
+    }
+}
+#endif /* CONFIG_BT_MESH_SYNC */
 static void event_cb_wifi_event(input_event_t *event, void *private_data)
 {
     static char *ssid;
@@ -442,15 +605,41 @@ static void event_cb_wifi_event(input_event_t *event, void *private_data)
         case CODE_WIFI_ON_PROV_CONNECT:
         {
             printf("[APP] [EVT] [PROV] [CONNECT] %lld\r\n", aos_now_ms());
-            printf("connecting to %s:%s...\r\n", ssid, password);
-            wifi_sta_connect(ssid, password);
+			#if defined(CONFIG_BT_MESH_SYNC)
+			if(event->value){
+				struct _wifi_conn *conn_info = (struct _wifi_conn *)event->value;
+				wifi_sta_connect(conn_info->ssid, conn_info->pask);
+				break;
+			}
+			#endif
+			printf("connecting to %s:%s...\r\n", ssid, password);
+			wifi_sta_connect(ssid, password);
         }
         break;
         case CODE_WIFI_ON_PROV_DISCONNECT:
         {
             printf("[APP] [EVT] [PROV] [DISCONNECT] %lld\r\n", aos_now_ms());
+			#if defined(CONFIG_BT_MESH_SYNC)
+            wifi_mgmr_sta_disconnect();
+            vTaskDelay(1000);
+            wifi_mgmr_sta_disable(NULL);
+			#endif
         }
         break;
+		#if defined(CONFIG_BT_MESH_SYNC)
+		case CODE_WIFI_ON_PROV_SCAN_START:
+		{
+			printf("[APP] [EVT] [PROV] [SCAN] %lld\r\n", aos_now_ms());
+			wifiprov_scan((void *)event->value);
+		}
+		break;
+		case CODE_WIFI_ON_PROV_STATE_GET:
+		{
+			printf("[APP] [EVT] [PROV] [STATE] %lld\r\n", aos_now_ms());
+			wifiprov_wifi_state_get((void *)event->value);
+		}
+		break;
+		#endif /*CONFIG_BT_MESH_SYNC*/
         default:
         {
             printf("[APP] [EVT] Unknown code %u, %lld\r\n", event->code, aos_now_ms());
@@ -671,8 +860,6 @@ static void cmd_httpc_test(char *buf, int len, int argc, char **argv)
 static void cmd_stack_wifi(char *buf, int len, int argc, char **argv)
 {
     /*wifi fw stack and thread stuff*/
-    static StackType_t wifi_fw_stack[1024];
-    static StaticTask_t wifi_fw_task;
     static uint8_t stack_wifi_init  = 0;
 
 
@@ -682,15 +869,256 @@ static void cmd_stack_wifi(char *buf, int len, int argc, char **argv)
     }
     stack_wifi_init = 1;
 
-    xTaskCreateStatic(wifi_main, (char*)"fw", 1024, NULL, TASK_PRIORITY_FW, wifi_fw_stack, &wifi_fw_task);
+    hal_wifi_start_firmware_task();
     /*Trigger to start Wi-Fi*/
     aos_post_event(EV_WIFI, CODE_WIFI_ON_INIT_DONE, 0);
 
 }
 
+#ifndef CONFIG_BT_TL
 static void cmd_stack_ble(char *buf, int len, int argc, char **argv)
 {
     ble_stack_start();
+}
+#endif
+
+#if defined(CFG_BLE_PDS)
+static void cmd_start_pds(char *buf, int len, int argc, char **argv)
+{
+    if(argc != 2)
+    {
+        printf("Invalid params\r\n");
+        return;
+    }
+    get_uint8_from_string(&argv[1], (uint8_t *)&pds_start);
+    if (pds_start == 1)
+    {
+        hal_pds_init();
+    }
+}
+#endif
+
+static void cmd_hbn_enter(char *buf, int len, int argc, char **argv)
+{
+    uint32_t time;
+    if (argc != 2) {
+        printf("Please Input Parameter!\r\n");
+        return;
+    } else {
+        time = (uint32_t)atoi(argv[1]);
+        printf("time:%u\r\n", time);
+        hal_hbn_enter(time);
+    }
+}
+
+static void cmd_logen(char *buf, int len, int argc, char **argv)
+{
+    bl_sys_logall_enable();
+}
+
+static void cmd_logdis(char *buf, int len, int argc, char **argv)
+{
+    bl_sys_logall_disable();
+}
+
+static void cmd_load0w(char *buf, int len, int argc, char **argv)
+{
+    volatile uint32_t v = 0;
+
+    /* backtrace */
+    v = *(volatile uint32_t *)0;
+}
+
+typedef enum {
+    TEST_OP_GET32 = 0,
+    TEST_OP_GET16,
+    TEST_OP_SET32 = 256,
+    TEST_OP_SET16,
+    TEST_OP_MAX = 0x7FFFFFFF
+} test_op_t;
+static __attribute__ ((noinline)) uint32_t misaligned_acc_test(void *ptr, test_op_t op, uint32_t v)
+{
+    uint32_t res = 0;
+
+    switch (op) {
+        case TEST_OP_GET32:
+            res = *(volatile uint32_t *)ptr;
+            break;
+        case TEST_OP_GET16:
+            res = *(volatile uint16_t *)ptr;
+            break;
+        case TEST_OP_SET32:
+            *(volatile uint32_t *)ptr = v;
+            break;
+        case TEST_OP_SET16:
+            *(volatile uint16_t *)ptr = v;
+            break;
+        default:
+            break;
+    }
+
+    return res;
+}
+
+void test_align(uint32_t buf)
+{
+    volatile uint32_t testv[4] = {0};
+    uint32_t t1 = 0;
+    uint32_t t2 = 0;
+    uint32_t t3 = 0;
+    uint32_t i = 0;
+    volatile uint32_t reg = buf;
+
+    portDISABLE_INTERRUPTS();
+
+    /* test get 32 */
+    __asm volatile ("nop":::"memory");
+    t1 = *(volatile uint32_t*)0x4000A52C;
+    // 3*n + 5
+    testv[0] = *(volatile uint32_t *)(reg + 0 * 8 + 1);
+    t2 = *(volatile uint32_t*)0x4000A52C;
+    // 3*n + 1
+    testv[1] = *(volatile uint32_t *)(reg + 1 * 8 + 0);
+    t3 = *(volatile uint32_t*)0x4000A52C;
+    log_info("testv[0] = %08lx, testv[1] = %08lx\r\n", testv[0], testv[1]);
+    log_info("time_us = %ld & %ld ---> %d\r\n", (t2 - t1), (t3 - t2), (t2 - t1)/(t3 - t2));
+
+    /* test get 16 */
+    __asm volatile ("nop":::"memory");
+    t1 = bl_timer_now_us();
+    for (i = 0; i < 1 * 1000 * 1000; i++) {
+        testv[0] = misaligned_acc_test((void *)(reg + 2 * 8 + 1), TEST_OP_GET16, 0);
+    }
+    t2 = bl_timer_now_us();
+    for (i = 0; i < 1 * 1000 * 1000; i++) {
+        testv[1] = misaligned_acc_test((void *)(reg + 3 * 8 + 0), TEST_OP_GET16, 0);
+    }
+    t3 = bl_timer_now_us();
+    log_info("testv[0] = %08lx, testv[1] = %08lx\r\n", testv[0], testv[1]);
+    log_info("time_us = %ld & %ld ---> %d\r\n", (t2 - t1), (t3 - t2), (t2 - t1)/(t3 - t2));
+
+    /* test set 32 */
+    __asm volatile ("nop":::"memory");
+    t1 = bl_timer_now_us();
+    for (i = 0; i < 1 * 1000 * 1000; i++) {
+        misaligned_acc_test((void *)(reg + 4 * 8 + 1), TEST_OP_SET32, 0x44332211);
+    }
+    t2 = bl_timer_now_us();
+    for (i = 0; i < 1 * 1000 * 1000; i++) {
+        misaligned_acc_test((void *)(reg + 5 * 8 + 0), TEST_OP_SET32, 0x44332211);
+    }
+    t3 = bl_timer_now_us();
+    log_info("time_us = %ld & %ld ---> %d\r\n", (t2 - t1), (t3 - t2), (t2 - t1)/(t3 - t2));
+
+    /* test set 16 */
+    __asm volatile ("nop":::"memory");
+    t1 = bl_timer_now_us();
+    for (i = 0; i < 1 * 1000 * 1000; i++) {
+        misaligned_acc_test((void *)(reg + 6 * 8 + 1), TEST_OP_SET16, 0x6655);
+    }
+    t2 = bl_timer_now_us();
+    for (i = 0; i < 1 * 1000 * 1000; i++) {
+        misaligned_acc_test((void *)(reg + 7 * 8 + 0), TEST_OP_SET16, 0x6655);
+    }
+    t3 = bl_timer_now_us();
+    log_info("time_us = %ld & %ld ---> %d\r\n", (t2 - t1), (t3 - t2), (t2 - t1)/(t3 - t2));
+
+    portENABLE_INTERRUPTS();
+}
+
+void test_misaligned_access(void) __attribute__((optimize("O0")));
+void test_misaligned_access(void)// __attribute__((optimize("O0")))
+{
+#define TEST_V_LEN         (32)
+    __attribute__ ((aligned(16))) volatile unsigned char test_vector[TEST_V_LEN] = {0};
+    int i = 0;
+    volatile uint32_t v = 0;
+    uint32_t addr = (uint32_t)test_vector;
+    volatile char *pb = (volatile char *)test_vector;
+    register float a asm("fa0") = 0.0f;
+    register float b asm("fa1") = 0.5f;
+
+    for (i = 0; i < TEST_V_LEN; i ++)
+        test_vector[i] = i;
+
+    addr += 1; // offset 1
+    __asm volatile ("nop");
+    v = *(volatile uint16_t *)(addr); // 0x0201
+    __asm volatile ("nop");
+    printf("%s: v=%8lx, should be 0x0201\r\n", __func__, v);
+    __asm volatile ("nop");
+    *(volatile uint16_t *)(addr) = 0x5aa5;
+    __asm volatile ("nop");
+    __asm volatile ("nop");
+    v = *(volatile uint16_t *)(addr); // 0x5aa5
+    __asm volatile ("nop");
+    printf("%s: v=%8lx, should be 0x5aa5\r\n", __func__, v);
+
+    addr += 4; // offset 5
+    __asm volatile ("nop");
+    v = *(volatile uint32_t *)(addr); //0x08070605
+    __asm volatile ("nop");
+    printf("%s: v=%8lx, should be 0x08070605\r\n", __func__, v);
+    __asm volatile ("nop");
+    *(volatile uint32_t *)(addr) = 0xa5aa55a5;
+    __asm volatile ("nop");
+    __asm volatile ("nop");
+    v = *(volatile uint32_t *)(addr); // 0xa5aa55a5
+    __asm volatile ("nop");
+    printf("%s: v=%8lx, should be 0xa5aa55a5\r\n", __func__, v);
+
+    pb[0x11] = 0x00;
+    pb[0x12] = 0x00;
+    pb[0x13] = 0xc0;
+    pb[0x14] = 0x3f;
+
+    addr += 12; // offset 0x11
+    __asm volatile ("nop");
+    a = *(float *)(addr);
+    __asm volatile ("nop");
+    v = a * 4.0f; /* should be 6 */
+    __asm volatile ("nop");
+    __asm volatile ("nop");
+    printf("%s: v=%8lx, should be 0x6\r\n", __func__, v);
+    b = v / 12.0f;
+    __asm volatile ("nop");
+    addr += 4; // offset 0x15
+    *(float *)(addr) = b;
+    __asm volatile ("nop");
+    v = *(volatile uint32_t *)(addr); // 0x3f000000
+    __asm volatile ("nop");
+    printf("%s: v=%8lx, should be 0x3f000000\r\n", __func__, v);
+}
+
+static void cmd_align(char *buf, int len, int argc, char **argv)
+{
+    char *testbuf = NULL;
+    int i = 0;
+
+    log_info("align test start.\r\n");
+    test_misaligned_access();
+
+    testbuf = aos_malloc(64);
+    if (!testbuf) {
+        log_error("mem error.\r\n");
+    }
+ 
+    memset(testbuf, 0xEE, 1024);
+    for (i = 0; i < 32; i++) {
+        testbuf[i] = i;
+    }
+    test_align((uint32_t)(testbuf));
+
+    log_buf(testbuf, 64);
+    aos_free(testbuf);
+
+    log_info("align test end.\r\n");
+}
+
+void cmd_mfg(char *buf, int len, int argc, char **argv)
+{
+    bl_sys_mfg_config();
+    hal_reboot();
 }
 
 const static struct cli_command cmds_user[] STATIC_CLI_CMD_ATTRIBUTE = {
@@ -707,10 +1135,21 @@ const static struct cli_command cmds_user[] STATIC_CLI_CMD_ATTRIBUTE = {
         { "exception_inst_illegal", "exception illegal instruction", cmd_exception_illegal_ins},
         /*Stack Command*/
         { "stack_wifi", "Wi-Fi Stack", cmd_stack_wifi},
+        #ifndef CONFIG_BT_TL
         { "stack_ble", "BLE Stack", cmd_stack_ble},
+        #endif
+        #if defined(CFG_BLE_PDS)
+        { "pds_start", "enable or disable pds", cmd_start_pds},
+        #endif
         /*TCP/IP network test*/
         {"http", "http client download test based on socket", http_test_cmd},
         {"httpc", "http client download test based on RAW TCP", cmd_httpc_test},
+        {"hbnenter", "hbnenter", cmd_hbn_enter},
+        {"logen", "logen", cmd_logen},
+        {"logdis", "logdis", cmd_logdis},
+        {"load0w", "load word from 0", cmd_load0w},
+        {"aligntc", "align case test", cmd_align},
+        {"mfg", "mfg", cmd_mfg},
 };
 
 static void _cli_init()
@@ -718,8 +1157,12 @@ static void _cli_init()
     /*Put CLI which needs to be init here*/
 int codex_debug_cli_init(void);
     codex_debug_cli_init();
-    easyflash_cli_init();
+//    easyflash_cli_init();
     network_netutils_iperf_cli_register();
+    network_netutils_tcpclinet_cli_register();
+    network_netutils_tcpserver_cli_register();
+    network_netutils_netstat_cli_register();
+    network_netutils_ping_cli_register();
     sntp_cli_init();
     bl_sys_time_cli_init();
     bl_sys_ota_cli_init();
@@ -759,18 +1202,51 @@ static void __opt_feature_init(void)
 #endif
 }
 
+static void event_cb_key_event(input_event_t *event, void *private_data)
+{
+    switch (event->code) {
+        case KEY_1:
+        {
+            printf("[KEY_1] [EVT] INIT DONE %lld\r\n", aos_now_ms());
+            printf("short press \r\n");
+        }
+        break;
+        case KEY_2:
+        {
+            printf("[KEY_2] [EVT] INIT DONE %lld\r\n", aos_now_ms());
+            printf("long press \r\n");
+        }
+        break;
+        case KEY_3:
+        {
+            printf("[KEY_3] [EVT] INIT DONE %lld\r\n", aos_now_ms());
+            printf("longlong press \r\n");
+        }
+        break;
+        default:
+        {
+            printf("[KEY] [EVT] Unknown code %u, %lld\r\n", event->code, aos_now_ms());
+            /*nothing*/
+        }
+    }
+}
+
+#if defined(CONFIG_BT_TL)
+extern void uart_init(uint8_t uartid);
+#endif
+
 static void aos_loop_proc(void *pvParameters)
 {
     int fd_console;
     uint32_t fdt = 0, offset = 0;
     static StackType_t proc_stack_looprt[512];
     static StaticTask_t proc_task_looprt;
-
+    
     /*Init bloop stuff*/
     looprt_start(proc_stack_looprt, 512, &proc_task_looprt);
     loopset_led_hook_on_looprt();
 
-    easyflash_init();
+//    easyflash_init();
     vfs_init();
     vfs_device_init();
 
@@ -784,6 +1260,7 @@ static void aos_loop_proc(void *pvParameters)
 #endif
     if (0 == get_dts_addr("gpio", &fdt, &offset)) {
         hal_gpio_init_from_dts(fdt, offset);
+        fdt_button_module_init((const void *)fdt, (int)offset);
     }
 
     __opt_feature_init();
@@ -798,6 +1275,15 @@ static void aos_loop_proc(void *pvParameters)
     }
 
     aos_register_event_filter(EV_WIFI, event_cb_wifi_event, NULL);
+    aos_register_event_filter(EV_KEY, event_cb_key_event, NULL);
+
+    //tsen_adc_init();
+
+    #if defined(CONFIG_BT_TL)
+    //uart's pinmux has been configured in vfs_uart_init(load uart1's pin info from devicetree)
+    uart_init(1);
+    ble_controller_init(configMAX_PRIORITIES - 1);
+    #endif
 
     aos_loop_run();
 
@@ -813,7 +1299,8 @@ void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackTyp
     function then they must be declared static - otherwise they will be allocated on
     the stack and so not exists after this function exits. */
     static StaticTask_t xIdleTaskTCB;
-    static StackType_t uxIdleTaskStack[ configMINIMAL_STACK_SIZE ];
+    //static StackType_t uxIdleTaskStack[ configMINIMAL_STACK_SIZE ];
+    static StackType_t uxIdleTaskStack[512];
 
     /* Pass out a pointer to the StaticTask_t structure in which the Idle task's
     state will be stored. */
@@ -825,7 +1312,8 @@ void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackTyp
     /* Pass out the size of the array pointed to by *ppxIdleTaskStackBuffer.
     Note that, as the array is necessarily of type StackType_t,
     configMINIMAL_STACK_SIZE is specified in words, not bytes. */
-    *pulIdleTaskStackSize = configMINIMAL_STACK_SIZE;
+    //*pulIdleTaskStackSize = configMINIMAL_STACK_SIZE; 
+    *pulIdleTaskStackSize = 512;//size 512 words is For ble pds mode, otherwise stack overflow of idle task will happen.
 }
 
 /* configSUPPORT_STATIC_ALLOCATION and configUSE_TIMERS are both set to 1, so the
@@ -865,7 +1353,7 @@ void vAssertCalled(void)
 
 static void _dump_boot_info(void)
 {
-    char chip_feature[40];
+    char print_info[40];
     const char *banner;
 
     puts("Booting BL602 Chip...\r\n");
@@ -879,31 +1367,37 @@ static void _dump_boot_info(void)
     puts("\r\n");
     puts("------------------------------------------------------------\r\n");
     puts("RISC-V Core Feature:");
-    bl_chip_info(chip_feature);
-    puts(chip_feature);
+    bl_chip_info(print_info);
+    puts(print_info);
     puts("\r\n");
 
-    puts("Build Version: ");
+    puts("Build Version:      ");
     puts(BL_SDK_VER); // @suppress("Symbol is not resolved")
     puts("\r\n");
 
-    puts("Build Version: ");
-    puts(BL_SDK_VER); // @suppress("Symbol is not resolved")
+    puts("Std Driver Version: ");
+    puts(BL_SDK_STDDRV_VER); // @suppress("Symbol is not resolved")
     puts("\r\n");
 
-    puts("PHY   Version: ");
+    puts("PHY   Version:      ");// @suppress("Symbol is not resolved")
     puts(BL_SDK_PHY_VER); // @suppress("Symbol is not resolved")
     puts("\r\n");
 
-    puts("RF    Version: ");
+    puts("RF    Version:      ");
     puts(BL_SDK_RF_VER); // @suppress("Symbol is not resolved")
     puts("\r\n");
 
-    puts("Build Date: ");
+    puts("Build Date:         ");
     puts(__DATE__);
     puts("\r\n");
-    puts("Build Time: ");
+
+    puts("Build Time:         ");
     puts(__TIME__);
+    puts("\r\n");
+
+    puts("Boot Reason:        ");
+    bl_sys_rstinfo_getsting(print_info);
+    puts(print_info);
     puts("\r\n");
     puts("------------------------------------------------------------\r\n");
 
@@ -916,6 +1410,7 @@ static void system_init(void)
     bl_sec_init();
     bl_sec_test();
     bl_dma_init();
+    bl_rtc_init();
     hal_boot2_init();
 
     /* board config is set after system is init*/

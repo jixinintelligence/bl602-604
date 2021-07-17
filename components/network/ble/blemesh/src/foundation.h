@@ -5,6 +5,10 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+#ifndef __FOUNDATION_H__
+#define __FOUNDATION_H__
+
+#include "net/buf.h"
 
 #define OP_APP_KEY_ADD                     BT_MESH_MODEL_OP_1(0x00)
 #define OP_APP_KEY_UPDATE                  BT_MESH_MODEL_OP_1(0x01)
@@ -112,17 +116,24 @@
 #define STATUS_UNSPECIFIED                 0x10
 #define STATUS_INVALID_BINDING             0x11
 
-int bt_mesh_cfg_srv_init(struct bt_mesh_model *model, bool primary);
-int bt_mesh_health_srv_init(struct bt_mesh_model *model, bool primary);
+enum {
+	BT_MESH_VA_CHANGED,	/* Label information changed */
+};
 
-int bt_mesh_cfg_cli_init(struct bt_mesh_model *model, bool primary);
-int bt_mesh_health_cli_init(struct bt_mesh_model *model, bool primary);
+struct label {
+	u16_t ref;
+	u16_t addr;
+	u8_t  uuid[16];
+	atomic_t flags[1];
+};
 
 void bt_mesh_cfg_reset(void);
 
 void bt_mesh_heartbeat(u16_t src, u16_t dst, u8_t hops, u16_t feat);
 
 void bt_mesh_attention(struct bt_mesh_model *model, u8_t time);
+
+struct label *get_label(u16_t index);
 
 u8_t *bt_mesh_label_uuid_get(u16_t addr);
 
@@ -159,3 +170,6 @@ static inline void key_idx_unpack(struct net_buf_simple *buf,
 	*idx2 = sys_get_le16(&buf->data[1]) >> 4;
 	net_buf_simple_pull(buf, 3);
 }
+
+#endif /*__FOUNDATION_H__*/
+

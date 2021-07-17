@@ -44,6 +44,7 @@ struct wifi_apm_sta_info
 };
 
 int bl_main_powersaving(int mode);
+int bl_main_denoise(int mode);
 int bl_main_disconnect(void);
 int bl_main_phy_up(void);
 int bl_main_channel_set(int channel);
@@ -53,16 +54,19 @@ int bl_main_if_remove(uint8_t vif_index);
 int bl_main_if_add(int is_sta, struct netif *netif, uint8_t *vif_index);
 int bl_main_monitor(void);
 int bl_main_connect(const uint8_t* ssid, int ssid_len, const uint8_t *psk, int psk_len, const uint8_t *pmk, int pmk_len, const uint8_t *mac, const uint8_t band, const uint16_t freq);
-int bl_main_apm_start(char *ssid, char *password, int channel, uint8_t vif_index);
+int bl_main_apm_start(char *ssid, char *password, int channel, uint8_t vif_index, uint8_t hidden_ssid, uint16_t bcn_int);
 int bl_main_apm_stop(uint8_t vif_index);
 int bl_main_apm_sta_cnt_get(uint8_t *sta_cnt);
 int bl_main_apm_sta_info_get(struct wifi_apm_sta_info *apm_sta_info, uint8_t idx);
 int bl_main_apm_sta_delete(uint8_t sta_idx);
 int bl_main_apm_remove_all_sta();
-int bl_main_scan(void);
+int bl_main_conf_max_sta(uint8_t max_sta_supported);
+int bl_main_cfg_task_req(uint32_t ops, uint32_t task, uint32_t element, uint32_t type, void *arg1, void *arg2);
+int bl_main_scan(uint16_t *fixed_channels, uint16_t channel_num);
 int bl_main_raw_send(uint8_t *pkt , int len);
 int bl_main_set_country_code(char *country_code);
 int bl_main_get_channel_nums();
+int bl_main_beacon_interval_set(uint16_t beacon_int);
 
 struct wifi_event_sm_connect_ind
 {
@@ -95,11 +99,42 @@ struct wifi_event_sm_disconnect_ind
     int ft_over_ds;
 };
 
-#define WIFI_EVENT_BEACON_IND_AUTH_OPEN         0
-#define WIFI_EVENT_BEACON_IND_AUTH_WEP          1
-#define WIFI_EVENT_BEACON_IND_AUTH_WPA_PSK      2
-#define WIFI_EVENT_BEACON_IND_AUTH_WPA_ENT      3
+typedef struct
+{
+    uint8_t  noRsn      : 1;
+    uint8_t  wepStatic  : 1;
+    uint8_t  wepDynamic : 1;
+    uint8_t  wpa        : 1;
+    uint8_t  wpaNone    : 1;
+    uint8_t  wpa2       : 1;
+    uint8_t  cckm       : 1;
+    uint8_t  wapi       : 1;
+    uint8_t  rsvd       : 8;
+} wifi_secmode_t;
+
+typedef struct
+{
+    uint8_t   wep40      : 1;
+    uint8_t   wep104     : 1;
+    uint8_t   tkip       : 1;
+    uint8_t   ccmp       : 1;
+    uint8_t   rsvd       : 4;
+} wifi_cipher_t;
+
+#define WIFI_EVENT_BEACON_IND_AUTH_OPEN            0
+#define WIFI_EVENT_BEACON_IND_AUTH_WEP             1
+#define WIFI_EVENT_BEACON_IND_AUTH_WPA_PSK         2
+#define WIFI_EVENT_BEACON_IND_AUTH_WPA2_PSK        3
+#define WIFI_EVENT_BEACON_IND_AUTH_WPA_WPA2_PSK    4
+#define WIFI_EVENT_BEACON_IND_AUTH_WPA_ENT         5
 #define WIFI_EVENT_BEACON_IND_AUTH_UNKNOWN      0xff
+
+#define WIFI_EVENT_BEACON_IND_CIPHER_NONE           0
+#define WIFI_EVENT_BEACON_IND_CIPHER_WEP            1
+#define WIFI_EVENT_BEACON_IND_CIPHER_AES            2
+#define WIFI_EVENT_BEACON_IND_CIPHER_TKIP           3
+#define WIFI_EVENT_BEACON_IND_CIPHER_TKIP_AES       4
+
 struct wifi_event_beacon_ind
 {
     uint8_t bssid[6];
@@ -109,6 +144,12 @@ struct wifi_event_beacon_ind
     int8_t ppm_rel;
     uint8_t channel;
     uint8_t auth;//0: open; 1:wep; 2:WPA/WPA2 - PSK; 3: WPA/WPA2 - Enterprise; 0xFF: unknown
+    uint8_t cipher;
+    wifi_cipher_t wpa_mcstCipher;
+    wifi_cipher_t wpa_ucstCipher;
+    wifi_cipher_t rsn_mcstCipher;
+    wifi_cipher_t rsn_ucstCipher;
+    wifi_secmode_t sec_mode;
     int ssid_len;
 };
 
@@ -127,6 +168,7 @@ struct wifi_event
 {
 #define WIFI_EVENT_ID_IND_CHANNEL_SWITCH        0
 #define WIFI_EVENT_ID_IND_SCAN_DONE             1
+#define WIFI_EVENT_ID_IND_SCAN_DONE_ONJOIN      2
     uint32_t id;
     uint8_t data[0];
 };

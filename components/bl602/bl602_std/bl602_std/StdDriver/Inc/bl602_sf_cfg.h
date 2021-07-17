@@ -100,6 +100,7 @@ void SF_Cfg_Restore_GPIO17_Fun(uint8_t fun);
 uint32_t SF_Cfg_Flash_Identify(uint8_t callFromFlash,uint32_t autoScan,uint32_t flashPinCfg,uint8_t restoreDefault,
                                SPI_Flash_Cfg_Type * pFlashCfg);
 void SF_Cfg_Init_Ext_Flash_Gpio(uint8_t extFlashPin);
+void SF_Cfg_Init_Internal_Flash_Gpio(void);
 void SF_Cfg_Deinit_Ext_Flash_Gpio(uint8_t extFlashPin);
 
 /*@} end of group SF_CFG_Public_Functions */

@@ -44,7 +44,6 @@ void blog_testc1_entry(void *arg)
     blog_info("blog_testc1 info\r\n");
     blog_warn("blog_testc1 warn\r\n");
     blog_error("blog_testc1 error\r\n");
-    blog_assert("blog_testc1 assert\r\n");
 
     blog_debug_user(blog_testc1,"blog_testc1 debug user\r\n");
     blog_info_user(blog_testc1,"blog_testc1 info user\r\n");
@@ -58,7 +57,6 @@ void blog_testc1_entry(void *arg)
         blog_info("blog_testc1 info\r\n");
         blog_warn("blog_testc1 warn\r\n");
         blog_error("blog_testc1 error\r\n");
-        blog_assert("blog_testc1 assert\r\n");
 
         blog_debug_user(blog_testc1,"blog_testc1 debug user\r\n");
         blog_info_user(blog_testc1,"blog_testc1 info user\r\n");

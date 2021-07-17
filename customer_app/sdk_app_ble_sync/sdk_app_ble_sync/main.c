@@ -54,6 +54,7 @@
 #include <bl_uart.h>
 #include <bl_chip.h>
 #include <bl_wifi.h>
+#include <hal_wifi.h>
 #include <bl_sec.h>
 #include <bl_cks.h>
 #include <bl_irq.h>
@@ -327,6 +328,7 @@ static void _connect_wifi()
 
 typedef struct _wifi_item {
     char ssid[32];
+    uint32_t ssid_len;
     uint8_t bssid[6];
     uint8_t channel;
     uint8_t auth;
@@ -335,14 +337,18 @@ typedef struct _wifi_item {
 
 struct _wifi_conn {
     char ssid[32];
+    char ssid_tail[1];
     char pask[64];
 };
 
 struct _wifi_state {
-    uint8_t state;
     char ip[16];
     char gw[16];
     char mask[16];
+    char ssid[32];
+    char ssid_tail[1];
+    uint8_t bssid[6];
+    uint8_t state;
 };
 
 static void wifi_sta_connect(char *ssid, char *password)
@@ -361,6 +367,7 @@ static void scan_item_cb(wifi_mgmr_ap_item_t *env, uint32_t *param1, wifi_mgmr_a
     wifi_item.auth = item->auth;
     wifi_item.rssi = item->rssi;
     wifi_item.channel = item->channel;
+    wifi_item.ssid_len = item->ssid_len;
     memcpy(wifi_item.ssid, item->ssid, sizeof(wifi_item.ssid));
     memcpy(wifi_item.bssid, item->bssid, sizeof(wifi_item.bssid));
 
@@ -381,17 +388,25 @@ static void wifiprov_scan(void *p_arg)
 
 static void wifiprov_wifi_state_get(void *p_arg)
 {
+    int tmp_state;
+    wifi_mgmr_sta_connect_ind_stat_info_t info;
     ip4_addr_t ip, gw, mask;
     struct _wifi_state state;
     void (*state_get_cb)(void *) = (void (*)(void *))p_arg;
 
     memset(&state, 0, sizeof(state));
-    wifi_mgmr_state_get((int *)&state.state);
+    memset(&info, 0, sizeof(info));
+    wifi_mgmr_state_get(&tmp_state);
     wifi_mgmr_sta_ip_get(&ip.addr, &gw.addr, &mask.addr);
+    wifi_mgmr_sta_connect_ind_stat_get(&info);
 
+    state.state = tmp_state;
     strcpy(state.ip, ip4addr_ntoa(&ip));
     strcpy(state.mask, ip4addr_ntoa(&mask));
     strcpy(state.gw, ip4addr_ntoa(&gw));
+    memcpy(state.ssid, info.ssid, sizeof(state.ssid));
+    memcpy(state.bssid, info.bssid, sizeof(state.bssid));
+    state.ssid_tail[0] = 0;
 
     printf("IP  :%s \r\n", state.ip);
     printf("GW  :%s \r\n", state.gw);
@@ -502,9 +517,9 @@ static void event_cb_wifi_event(input_event_t *event, void *private_data)
 
 static void event_cb_cli(input_event_t *event, void *p_arg)
 {
-    char *cmd1 = "cmd_init\r\n";
-    char *cmd2 = "cmd_start_adv 0 0 0100 0100\r\n";
-    char *cmd3 = "cmd_stop_adv\r\n";
+    char *cmd1 = "ble_init\r\n";
+    char *cmd2 = "ble_start_adv 0 0 0x100 0x100\r\n";
+    char *cmd3 = "ble_stop_adv\r\n";
 
     switch (event->code) {
         case CODE_CLI_BLSYNC_START :
@@ -541,8 +556,6 @@ err_t cb_httpc_headers_done_fn(httpc_state_t *connection, void *arg, struct pbuf
 static void stack_wifi(void)
 {
     /*wifi fw stack and thread stuff*/
-    static StackType_t wifi_fw_stack[1024];
-    static StaticTask_t wifi_fw_task;
     static uint8_t stack_wifi_init  = 0;
 
 
@@ -552,7 +565,7 @@ static void stack_wifi(void)
     }
     stack_wifi_init = 1;
 
-    xTaskCreateStatic(wifi_main, (char*)"fw", 1024, NULL, TASK_PRIORITY_FW, wifi_fw_stack, &wifi_fw_task);
+    hal_wifi_start_firmware_task();
     /*Trigger to start Wi-Fi*/
     aos_post_event(EV_WIFI, CODE_WIFI_ON_INIT_DONE, 0);
 
@@ -617,20 +630,25 @@ static void __opt_feature_init(void)
 #endif
 }
 
-static void blsync_ble_start_entry (void *p_arg)
+static void app_delayed_action_bleadv(void *arg)
 {
-    char *cmd1 = "cmd_init\r\n";
-    char *cmd2 = "cmd_start_adv 0 0 0100 0100\r\n";
+    char *cmd1 = "ble_init\r\n";
+    char *cmd2 = "ble_start_adv 0 0 0x100 0x100\r\n";
 
-    vTaskDelay(1000);
-    stack_ble();
-    vTaskDelay(1000);
-    stack_wifi();
-    vTaskDelay(1000);
     aos_cli_input_direct(cmd1, strlen(cmd1));
     aos_cli_input_direct(cmd2, strlen(cmd2));
+}
 
-    vTaskDelete(NULL);
+static void app_delayed_action_wifi(void *arg)
+{
+    stack_wifi();
+    aos_post_delayed_action(1000, app_delayed_action_bleadv, NULL);
+}
+
+static void app_delayed_action_ble(void *arg)
+{
+    stack_ble();
+    aos_post_delayed_action(1000, app_delayed_action_wifi, NULL);
 }
 
 static void aos_loop_proc(void *pvParameters)
@@ -639,9 +657,6 @@ static void aos_loop_proc(void *pvParameters)
     uint32_t fdt = 0, offset = 0;
     static StackType_t proc_stack_looprt[512];
     static StaticTask_t proc_task_looprt;
-
-    static StackType_t blsync_stack[512];
-    static StaticTask_t blsync_task;
 
     /*Init bloop stuff*/
     looprt_start(proc_stack_looprt, 512, &proc_task_looprt);
@@ -678,13 +693,7 @@ static void aos_loop_proc(void *pvParameters)
 
     aos_register_event_filter(EV_CLI, event_cb_cli, NULL);
 
-    xTaskCreateStatic(blsync_ble_start_entry,
-                      (char*)"blsync_ble",
-                      512,
-                      NULL,
-                      15,
-                      blsync_stack,
-                      &blsync_task);
+    aos_post_delayed_action(1000, app_delayed_action_ble, NULL);
 
     aos_loop_run();
 

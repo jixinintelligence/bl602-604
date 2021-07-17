@@ -1,57 +1,39 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 /****************************************************************************
 FILE NAME
     ble_tp_svc.c
 
 DESCRIPTION
+    test profile demo
+
 NOTES
 */
 /****************************************************************************/
 
 #include <errno.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <FreeRTOS.h>
+#include <task.h>
+#include <blog.h>
 
 #include "bluetooth.h"
 #include "conn.h"
 #include "gatt.h"
+#include "hci_core.h"
 #include "uuid.h"
 #include "ble_tp_svc.h"
-
 
 static void ble_tp_connected(struct bt_conn *conn, u8_t err);
 static void ble_tp_disconnected(struct bt_conn *conn, u8_t reason);
 
-
 struct bt_conn *ble_tp_conn;
+struct bt_gatt_exchange_params exchg_mtu;
+TaskHandle_t ble_tp_task_h;
 
+int tx_mtu_size = 20;
+u8_t tp_start = 0;
+static u8_t created_tp_task = 0;
+static u8_t isRegister = 0;
 
 static struct bt_conn_cb ble_tp_conn_callbacks = {
 	.connected	=   ble_tp_connected,
@@ -59,14 +41,58 @@ static struct bt_conn_cb ble_tp_conn_callbacks = {
 };
 
 /*************************************************************************
-NAME    
+NAME
+    ble_tp_tx_mtu_size
+*/
+static void ble_tp_tx_mtu_size(struct bt_conn *conn, u8_t err,
+			  struct bt_gatt_exchange_params *params)
+{
+   if(!err)
+   {
+        tx_mtu_size = bt_gatt_get_mtu(ble_tp_conn);
+        printf("ble tp echange mtu size success, mtu size: %d\n", tx_mtu_size);
+   }
+   else
+   {
+        printf("ble tp echange mtu size failure, err: %d\n", err);
+   }
+}
+
+/*************************************************************************
+NAME
     ble_tp_connected
 */
 static void ble_tp_connected(struct bt_conn *conn, u8_t err)
-{   
-	printf("%s\n",__func__);
+{
+	int tx_octets = 0x00fb;
+	int tx_time = 0x0848;
+	int ret = -1;
 
+    if( err )
+        return;
+
+	printf("%s\n",__func__);
 	ble_tp_conn = conn;
+
+	//set data length after connected.
+	ret = bt_le_set_data_len(ble_tp_conn, tx_octets, tx_time);
+	if(!ret)
+	{
+		printf("ble tp set data length success.\n");
+	}
+	else
+	{
+		printf("ble tp set data length failure, err: %d\n", ret);
+	}
+
+	//exchange mtu size after connected.
+	exchg_mtu.func = ble_tp_tx_mtu_size;
+	ret = bt_gatt_exchange_mtu(ble_tp_conn, &exchg_mtu);
+	if (!ret) {
+		printf("ble tp exchange mtu size pending.\n");
+	} else {
+		printf("ble tp exchange mtu size failure, err: %d\n", ret);
+	}
 }
 
 /*************************************************************************
@@ -81,47 +107,149 @@ static void ble_tp_disconnected(struct bt_conn *conn, u8_t reason)
 }
 
 /*************************************************************************
-NAME    
-    ble_tp_notify
-*/ 
-
-int ble_tp_notify()
+NAME
+    ble_tp_recv_rd
+*/
+static int ble_tp_recv_rd(struct bt_conn *conn,	const struct bt_gatt_attr *attr,
+                                        void *buf, u16_t len, u16_t offset)
 {
-	int err = -1;
-	u16_t slen = 244;
+    int size = 9;
+    char data[9] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09};
 
-	char data[244] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09};
+    memcpy(buf, data, size);
 
-	if(ble_tp_conn && enable_notify)
+    return size;
+}
+
+/*************************************************************************
+NAME
+    ble_tp_recv_wr
+*/
+static int ble_tp_recv_wr(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+                                        const void *buf, u16_t len, u16_t offset, u8_t flags)
+{
+    blog_debug("recv data len=%d, offset=%d, flag=%d\r\n", len, offset, flags);
+
+    if (flags & BT_GATT_WRITE_FLAG_PREPARE)
+    {
+        //Don't use prepare write data, execute write will upload data again.
+        printf("rcv prepare write request\n");
+        return 0;
+    }
+
+    if(flags & BT_GATT_WRITE_FLAG_CMD)
+    {
+        //Use write command data.
+        blog_debug("rcv write command\n");
+    }
+    else
+    {
+        //Use write request / execute write data.
+        blog_debug("rcv write request / exce write\n");
+    }
+
+    return len;
+}
+
+/*************************************************************************
+NAME    
+    indicate_rsp /bl_tp_send_indicate
+*/ 
+struct bt_gatt_indicate_params *ind_params;
+
+void indicate_rsp(struct bt_conn *conn, const struct bt_gatt_attr *attr,	u8_t err)
+{
+    free(ind_params);
+    printf("%s, receive comfirmation, err:%d\n", __func__, err);
+}
+
+static int bl_tp_send_indicate(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+				                    const void *data, u16_t len)
+{
+	ind_params = malloc(sizeof(struct bt_gatt_indicate_params));
+	if(ind_params == NULL)
 	{
-	       printf("bletp tx\n");
-		err = bt_gatt_notify(ble_tp_conn, get_attr(BT_CHAR_BLE_TP_TX_ATTR_INDEX), data, slen);
+	    return -1;
 	}
 
-	return err;
+	ind_params->attr = attr;
+	ind_params->data = data;
+	ind_params->len = len;
+	ind_params->func = indicate_rsp;
+	ind_params->uuid = NULL;
+
+	return bt_gatt_indicate(conn, ind_params);
+}
+
+/*************************************************************************
+NAME
+    ble_tp_ind_ccc_changed
+*/
+static void ble_tp_ind_ccc_changed(const struct bt_gatt_attr *attr, u16_t value)
+{
+    int err = -1;
+    char data[9] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09};
+
+    if(value == BT_GATT_CCC_INDICATE) {
+        err = bl_tp_send_indicate(ble_tp_conn, get_attr(BT_CHAR_BLE_TP_IND_ATTR_VAL_INDEX), data, 9);
+        printf("ble tp send indatcate: %d\n", err);
+    }
+}
+
+/*************************************************************************
+NAME
+    ble_tp_notify
+*/
+static void ble_tp_notify_task(void *pvParameters)
+{
+    int err = -1;
+    char data[244] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09};
+
+    while(1)
+    {
+        err = bt_gatt_notify(ble_tp_conn, get_attr(BT_CHAR_BLE_TP_NOT_ATTR_VAL_INDEX), data, (tx_mtu_size - 3));
+        blog_debug("ble tp send notify : %d\n", err);
+
+    }
 }
 
 /*************************************************************************
 NAME    
-    ble_tp_ccc_cfg_changed
+    ble_tp_not_ccc_changed
 */ 
-static void ble_tp_ccc_cfg_changed(const struct bt_gatt_attr *attr, u16_t value)
+static void ble_tp_not_ccc_changed(const struct bt_gatt_attr *attr, u16_t value)
 {
-	enable_notify = (value == BT_GATT_CCC_NOTIFY);
-	printf("%s, Notify enable? %d\n", __func__, enable_notify);
-
-}
-
-/*************************************************************************
-NAME    
-    ble_tp_recv
-*/ 
-static int ble_tp_recv(struct bt_conn *conn,
-			  const struct bt_gatt_attr *attr, const void *buf,
-			  u16_t len, u16_t offset, u8_t flags)
-{
-	printf("bletp rx\n");
-	return 0;
+    printf("ccc:value=[%d]\r\n",value);
+    
+    if(tp_start){
+   
+        if(value == BT_GATT_CCC_NOTIFY) {
+            if(xTaskCreate(ble_tp_notify_task, (char*)"bletp", 256, NULL, 15, &ble_tp_task_h) == pdPASS)
+            {
+                created_tp_task = 1;
+                printf("Create throughput tx task success .\n");
+            }       
+            else        
+            {      
+                created_tp_task = 0;
+                printf("Create throughput tx taskfail .\n");
+            }
+        } else {
+            
+            if(created_tp_task){
+                printf("Delete throughput tx task .\n");
+                vTaskDelete(ble_tp_task_h);
+                created_tp_task = 0;
+            }
+        }
+    }
+    else if(tp_start == 0){
+        if(created_tp_task){
+            printf("Delete throughput tx task .\n");
+            vTaskDelete(ble_tp_task_h);
+            created_tp_task = 0;
+        }
+    }
 }
 
 /*************************************************************************
@@ -130,21 +258,38 @@ static int ble_tp_recv(struct bt_conn *conn,
 static struct bt_gatt_attr attrs[]= {
 	BT_GATT_PRIMARY_SERVICE(BT_UUID_SVC_BLE_TP),
 
-	BT_GATT_CHARACTERISTIC(BT_UUID_CHAR_BLE_TP_TX,
-							BT_GATT_CHRC_NOTIFY,
-							BT_GATT_PERM_READ, 
-							NULL, 
+        BT_GATT_CHARACTERISTIC(BT_UUID_CHAR_BLE_TP_RD,
+							BT_GATT_CHRC_READ,
+							BT_GATT_PERM_READ,
+							ble_tp_recv_rd,
 							NULL,
 							NULL),
 
-	BT_GATT_CCC(ble_tp_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+	BT_GATT_CHARACTERISTIC(BT_UUID_CHAR_BLE_TP_WR,
+							BT_GATT_CHRC_WRITE |BT_GATT_CHRC_WRITE_WITHOUT_RESP,
+							BT_GATT_PERM_WRITE|BT_GATT_PERM_PREPARE_WRITE,
+							NULL,
+							ble_tp_recv_wr,
+							NULL),
 
-	BT_GATT_CHARACTERISTIC(BT_UUID_CHAR_BLE_TP_RX,
-							BT_GATT_CHRC_WRITE_WITHOUT_RESP,
-							BT_GATT_PERM_READ | BT_GATT_PERM_WRITE,
-							NULL, 
-							ble_tp_recv,
-							NULL)
+	BT_GATT_CHARACTERISTIC(BT_UUID_CHAR_BLE_TP_IND,
+							BT_GATT_CHRC_INDICATE,
+							NULL,
+							NULL,
+							NULL,
+							NULL),
+
+	BT_GATT_CCC(ble_tp_ind_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+
+	BT_GATT_CHARACTERISTIC(BT_UUID_CHAR_BLE_TP_NOT,
+							BT_GATT_CHRC_NOTIFY,
+							NULL,
+							NULL,
+							NULL,
+							NULL),
+							
+	BT_GATT_CCC(ble_tp_not_ccc_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE)
+
 };
 
 /*************************************************************************
@@ -166,8 +311,12 @@ NAME
 */
 void ble_tp_init()
 {
-	bt_conn_cb_register(&ble_tp_conn_callbacks);
-	bt_gatt_service_register(&ble_tp_server);
+    if( !isRegister )
+    {
+        isRegister = 1;
+        bt_conn_cb_register(&ble_tp_conn_callbacks);
+	    bt_gatt_service_register(&ble_tp_server);
+    }
 }
 
 

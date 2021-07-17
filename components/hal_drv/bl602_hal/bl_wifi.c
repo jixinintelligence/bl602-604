@@ -42,8 +42,12 @@ typedef struct _bl_wifi_env {
     uint8_t ap_mac_addr_board[6];
     uint8_t ap_mac_addr_usr[6];
     uint8_t country_code;
+
     bl_wifi_ap_info_t ap_info;
     uint8_t ap_info_en;
+
+    bl_wifi_ap_info_t sta_info;
+    uint8_t sta_info_en;
 } bl_wifi_env_t;
 
 bl_wifi_env_t wifi_env;
@@ -141,6 +145,24 @@ int bl_wifi_ap_info_get(bl_wifi_ap_info_t* ap_info)
         return -1;
     }
     memcpy(ap_info, &wifi_env.ap_info, sizeof(bl_wifi_ap_info_t));
+    return 0;
+}
+
+int bl_wifi_sta_info_set(uint8_t* ssid, uint8_t ssid_len, uint8_t* psk, uint8_t psk_len, int autoconnect)
+{
+    memset(&wifi_env.sta_info, 0, sizeof(bl_wifi_ap_info_t));
+    memcpy(wifi_env.sta_info.ssid, ssid, ssid_len);
+    memcpy(wifi_env.sta_info.psk, psk, psk_len);
+    wifi_env.sta_info_en = autoconnect;
+    return 0;
+}
+
+int bl_wifi_sta_info_get(bl_wifi_ap_info_t* sta_info)
+{
+    if (wifi_env.sta_info_en != 1) {
+        return -1;
+    }
+    memcpy(sta_info, &wifi_env.sta_info, sizeof(bl_wifi_ap_info_t));
     return 0;
 }
 

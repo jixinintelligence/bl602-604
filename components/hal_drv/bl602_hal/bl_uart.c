@@ -44,8 +44,15 @@ void UART1_IRQHandler(void);
 #define FIFO_TX_SIZE_BURST      (32)
 static const uint32_t uartAddr[2] = {UART0_BASE, UART1_BASE};
 
-static cb_uart_notify_t cbs_notify[UART_NUMBER_SUPPORTED];
-static void *cbs_uart_notify_arg[UART_NUMBER_SUPPORTED][8];//0 for rx callback arg, 1-3 for rx ring buffer; 4 for tx callback arg, 5-7 for tx ring buffer
+typedef struct bl_uart_notify {
+    cb_uart_notify_t rx_cb;
+    void            *rx_cb_arg;
+
+    cb_uart_notify_t tx_cb;
+    void            *tx_cb_arg;
+} bl_uart_notify_t;
+
+static bl_uart_notify_t g_uart_notify_arg[UART_NUMBER_SUPPORTED];
 
 static void gpio_init(uint8_t id, uint8_t tx_pin, uint8_t rx_pin, uint8_t cts_pin, uint8_t rts_pin)
 {
@@ -76,7 +83,7 @@ static void gpio_init(uint8_t id, uint8_t tx_pin, uint8_t rx_pin, uint8_t cts_pi
     }
 
     // clk
-    //GLB_Set_UART_CLK(1, HBN_UART_CLK_FCLK, 0);
+    //GLB_Set_UART_CLK(1, HBN_UART_CLK_160M, 0);
 
     GLB_UART_Fun_Sel(tx_pin%8, tx_sigfun);
     GLB_UART_Fun_Sel(rx_pin%8, rx_sigfun);
@@ -85,6 +92,8 @@ static void gpio_init(uint8_t id, uint8_t tx_pin, uint8_t rx_pin, uint8_t cts_pi
 int bl_uart_init(uint8_t id, uint8_t tx_pin, uint8_t rx_pin, uint8_t cts_pin, uint8_t rts_pin, uint32_t baudrate)
 {
     static uint8_t uart_clk_init = 0;
+    const uint8_t uart_div = 3;
+
     UART_CFG_Type uartCfg =
     {
         160*1000*1000,                                        /* UART clock */
@@ -107,7 +116,7 @@ int bl_uart_init(uint8_t id, uint8_t tx_pin, uint8_t rx_pin, uint8_t cts_pin, ui
 
     /* enable clk */
     if (0 == uart_clk_init) {
-        GLB_Set_UART_CLK(1, HBN_UART_CLK_FCLK, 0);
+        GLB_Set_UART_CLK(1, HBN_UART_CLK_160M, uart_div);
         uart_clk_init = 1;
     }
 
@@ -115,6 +124,7 @@ int bl_uart_init(uint8_t id, uint8_t tx_pin, uint8_t rx_pin, uint8_t cts_pin, ui
     gpio_init(id, tx_pin, rx_pin, cts_pin, rts_pin);
 
     uartCfg.baudRate = baudrate;
+    uartCfg.uartClk = (160 * 1000 * 1000) / (uart_div + 1);
 
     /* Disable all interrupt */
     UART_IntMask(id, UART_INT_ALL, MASK);
@@ -170,6 +180,7 @@ int bl_uart_int_rx_enable(uint8_t id)
 {
     UART_SetRxTimeoutValue((UART_ID_Type)id, 24);
     UART_IntMask((UART_ID_Type)id, UART_INT_RX_FIFO_REQ, UNMASK);
+    UART_IntMask((UART_ID_Type)id, UART_INT_RX_END, UNMASK);
     UART_IntMask((UART_ID_Type)id, UART_INT_RTO, UNMASK);
     return 0;
 }
@@ -177,6 +188,7 @@ int bl_uart_int_rx_enable(uint8_t id)
 int bl_uart_int_rx_disable(uint8_t id)
 {
     UART_IntMask((UART_ID_Type)id, UART_INT_RX_FIFO_REQ, MASK);
+    UART_IntMask((UART_ID_Type)id, UART_INT_RX_END, MASK);
     UART_IntMask((UART_ID_Type)id, UART_INT_RTO, MASK);
     return 0;
 }
@@ -199,6 +211,8 @@ int bl_uart_flush(uint8_t id)
     while (UART_FIFO_TX_CNT != UART_GetTxFifoCount(id)) {
     }
 
+    while(UART_GetTxBusBusyStatus(id) == SET){}
+    
     return 0;
 }
 
@@ -216,7 +230,7 @@ void bl_uart_setconfig(uint8_t id, uint32_t baudrate, UART_Parity_Type parity)
 {
     UART_CFG_Type UartCfg =
     {
-        160*1000*1000,                                       /* UART clock */
+        40*1000*1000,                                       /* UART clock */
         115200,                                              /* UART Baudrate */
         UART_DATABITS_8,                                     /* UART data bits length */
         UART_STOPBITS_1,                                     /* UART data stop bits length */
@@ -245,18 +259,8 @@ void bl_uart_setbaud(uint8_t id, uint32_t baud)
     bl_uart_setconfig(id, baud, UART_PARITY_NONE);
 }
 
-int bl_uart_int_enable(uint8_t id, uint8_t *rx_buffer, uint8_t *rx_idx_write, uint8_t *rx_idx_read, uint8_t *tx_buffer, uint8_t *tx_idx_write, uint8_t *tx_idx_read)
+int bl_uart_int_enable(uint8_t id)
 {
-    /*setup ringbuffer*/
-    //TODO use struct for ring buffer
-    cbs_uart_notify_arg[id][1] = rx_buffer;
-    cbs_uart_notify_arg[id][2] = rx_idx_write;
-    cbs_uart_notify_arg[id][3] = rx_idx_read;
-    cbs_uart_notify_arg[id][5] = tx_buffer;
-    cbs_uart_notify_arg[id][6] = tx_idx_write;
-    cbs_uart_notify_arg[id][7] = tx_idx_read;
-
-    /*enable INT for receving data to ringbuffer*/
     switch (id) {
         case 0:
         {
@@ -283,39 +287,88 @@ int bl_uart_int_enable(uint8_t id, uint8_t *rx_buffer, uint8_t *rx_idx_write, ui
     return 0;
 }
 
-int bl_uart_int_cb_notify_register(uint8_t id, cb_uart_notify_t cb, void *arg)
+int bl_uart_int_disable(uint8_t id)
 {
-    if (!(id < UART_NUMBER_SUPPORTED)) {
-        /*UART ID overflow*/
-        return -1;
+    switch (id) {
+        case 0:
+        {
+            bl_uart_int_rx_disable(0);
+            bl_uart_int_tx_disable(0);
+            bl_irq_unregister(UART0_IRQn, UART0_IRQHandler);
+            bl_irq_disable(UART0_IRQn);
+        }
+        break;
+        case 1:
+        {
+            bl_uart_int_rx_disable(1);
+            bl_uart_int_tx_disable(1);
+            bl_irq_unregister(UART1_IRQn, UART1_IRQHandler);
+            bl_irq_disable(UART1_IRQn);
+        }
+        break;
+        default:
+        {
+            return -1;
+        }
     }
-
-    cbs_uart_notify_arg[id][0] = arg;
-    cbs_notify[id] = cb;
 
     return 0;
 }
 
-int bl_uart_int_cb_notify_unregister(uint8_t id, cb_uart_notify_t cb, void *arg)
+int bl_uart_int_rx_notify_register(uint8_t id, cb_uart_notify_t cb, void *arg)
 {
     if (!(id < UART_NUMBER_SUPPORTED)) {
         /*UART ID overflow*/
         return -1;
     }
-    cbs_uart_notify_arg[id][0] = NULL;
-    cbs_notify[id] =NULL;
+
+    g_uart_notify_arg[id].rx_cb = cb;
+    g_uart_notify_arg[id].rx_cb_arg = arg;
+
+    return 0;
+}
+
+int bl_uart_int_tx_notify_register(uint8_t id, cb_uart_notify_t cb, void *arg)
+{
+    if (!(id < UART_NUMBER_SUPPORTED)) {
+        /*UART ID overflow*/
+        return -1;
+    }
+
+    g_uart_notify_arg[id].tx_cb = cb;
+    g_uart_notify_arg[id].tx_cb_arg = arg;
+
+    return 0;
+}
+
+int bl_uart_int_rx_notify_unregister(uint8_t id, cb_uart_notify_t cb, void *arg)
+{
+    if (!(id < UART_NUMBER_SUPPORTED)) {
+        /*UART ID overflow*/
+        return -1;
+    }
+    g_uart_notify_arg[id].rx_cb = NULL;
+    g_uart_notify_arg[id].rx_cb_arg = NULL;
+
+    return 0;
+}
+
+int bl_uart_int_tx_notify_unregister(uint8_t id, cb_uart_notify_t cb, void *arg)
+{
+    if (!(id < UART_NUMBER_SUPPORTED)) {
+        /*UART ID overflow*/
+        return -1;
+    }
+    g_uart_notify_arg[id].tx_cb = NULL;
+    g_uart_notify_arg[id].tx_cb_arg = NULL;
 
     return 0;
 }
 
 static inline void uart_generic_notify_handler(uint8_t id)
 {
-    uint32_t ch;
     cb_uart_notify_t cb;
     void *arg;
-    uint8_t *buffer, *idx_write, *idx_read;
-    uint8_t idx_w, idx_r;
-    int i;
     uint32_t tmpVal = 0;
     uint32_t maskVal = 0;
     uint32_t UARTx = uartAddr[id];
@@ -332,63 +385,36 @@ static inline void uart_generic_notify_handler(uint8_t id)
     /* Length of uart rx data transfer arrived interrupt */
     if(BL_IS_REG_BIT_SET(tmpVal,UART_URX_END_INT) && !BL_IS_REG_BIT_SET(maskVal,UART_CR_URX_END_MASK)){
         BL_WR_REG(UARTx,UART_INT_CLEAR,0x2);
+
+        /*Receive Data ready*/
+        cb = g_uart_notify_arg[id].rx_cb;
+        arg = g_uart_notify_arg[id].rx_cb_arg;
+
+        if (cb) {
+            /*notify up layer*/
+            cb(arg);
+        }
     }
 
     /* Tx fifo ready interrupt,auto-cleared when data is pushed */
     if(BL_IS_REG_BIT_SET(tmpVal,UART_UTX_FIFO_INT) && !BL_IS_REG_BIT_SET(maskVal,UART_CR_UTX_FIFO_MASK)){
         /* Transmit data request interrupt */
-        buffer = cbs_uart_notify_arg[id][5];
-        idx_write = cbs_uart_notify_arg[id][6];
-        idx_read = cbs_uart_notify_arg[id][7];
+        cb = g_uart_notify_arg[id].tx_cb;
+        arg = g_uart_notify_arg[id].tx_cb_arg;
 
-        idx_w = *idx_write;
-        idx_r = *idx_read;
-        /*Burst write with HALF FIFO*/
-        i = 0;
-        while ((i++) < FIFO_TX_SIZE_BURST) {
-            if (idx_r != idx_w) {
-                bl_uart_data_send((UART_ID_Type)id, buffer[idx_r]);
-            } else {
-                /*No more data for write*/
-                break;
-            }
-            idx_r = ((idx_r + 1) & BL_UART_BUFFER_SIZE_MASK);
-        }
-        if ((*idx_read) == idx_r) {
-            /*No data for tx during this loop, so disable it*/
-            //FIXME potential bug?
-            bl_uart_int_tx_disable(id);
-        } else {
-            /*Update ringbuffer status*/
-            *idx_read = idx_r;
+        if (cb) {
+            /*notify up layer*/
+            cb(arg);
         }
     }
 
     /* Rx fifo ready interrupt,auto-cleared when data is popped */
     if(BL_IS_REG_BIT_SET(tmpVal,UART_URX_FIFO_INT) && !BL_IS_REG_BIT_SET(maskVal,UART_CR_URX_FIFO_MASK)){
         /*Receive Data ready*/
-        cb = cbs_notify[id];
-        arg = cbs_uart_notify_arg[id][0];
-        buffer = cbs_uart_notify_arg[id][1];
-        idx_write = cbs_uart_notify_arg[id][2];
-        idx_read = cbs_uart_notify_arg[id][3];
 
-        idx_w = *idx_write;
-        idx_r = *idx_read;
+        cb = g_uart_notify_arg[id].rx_cb;
+        arg = g_uart_notify_arg[id].rx_cb_arg;
 
-        while (UART_GetRxFifoCount(id) > 0) {
-            /*we loop untill buffer is empty*/
-            //TODO untill buffer is NOT full?
-            ch  = BL_RD_BYTE(UARTx + UART_FIFO_RDATA_OFFSET);
-            if (((idx_w + 1) & BL_UART_BUFFER_SIZE_MASK) != idx_r) {
-                /*buffer is not full. so we read to ring buffer and callback*/
-                buffer[idx_w] = ch;
-                idx_w = ((idx_w + 1) & BL_UART_BUFFER_SIZE_MASK);
-            } else {
-                /*FIXME data is droped here*/
-            }
-        }
-        *idx_write = idx_w;
         if (cb) {
             /*notify up layer*/
             cb(arg);
@@ -400,28 +426,9 @@ static inline void uart_generic_notify_handler(uint8_t id)
         BL_WR_REG(UARTx,UART_INT_CLEAR,0x10);
 
         /*Receive Data ready*/
-        cb = cbs_notify[id];
-        arg = cbs_uart_notify_arg[id][0];
-        buffer = cbs_uart_notify_arg[id][1];
-        idx_write = cbs_uart_notify_arg[id][2];
-        idx_read = cbs_uart_notify_arg[id][3];
+        cb = g_uart_notify_arg[id].rx_cb;
+        arg = g_uart_notify_arg[id].rx_cb_arg;
 
-        idx_w = *idx_write;
-        idx_r = *idx_read;
-
-        while (UART_GetRxFifoCount(id) > 0) {
-            /*we loop untill buffer is empty*/
-            //TODO untill buffer is NOT full?
-            ch  = BL_RD_BYTE(UARTx + UART_FIFO_RDATA_OFFSET);
-            if (((idx_w + 1) & BL_UART_BUFFER_SIZE_MASK) != idx_r) {
-                /*buffer is not full. so we read to ring buffer and callback*/
-                buffer[idx_w] = ch;
-                idx_w = ((idx_w + 1) & BL_UART_BUFFER_SIZE_MASK);
-            } else {
-                /*FIXME data is droped here*/
-            }
-        }
-        *idx_write = idx_w;
         if (cb) {
             /*notify up layer*/
             cb(arg);

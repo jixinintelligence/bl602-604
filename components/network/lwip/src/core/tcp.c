@@ -1377,6 +1377,14 @@ tcp_slowtmr_start:
       }
     }
 
+    /* Check if this PCB has stayed too lang in FIN_WAIT_1 or CLOSING */
+    if (pcb->state == FIN_WAIT_1 || pcb->state == CLOSING) {
+      if ((u32_t)(tcp_ticks - pcb->tmr) > LWIP_TCP_CLOSE_TIMEOUT_MS_DEFAULT / TCP_SLOW_INTERVAL) {
+        ++pcb_remove;
+        LWIP_DEBUGF(TCP_DEBUG, ("tcp_slowtmr: removing pcb stuck in FIN_WAIT_1/CLOSING"));
+      }
+    }
+
     /* If the PCB should be removed, do it. */
     if (pcb_remove) {
       struct tcp_pcb *pcb2;
@@ -2684,5 +2692,13 @@ tcp_ext_arg_invoke_callbacks_passive_open(struct tcp_pcb_listen *lpcb, struct tc
   return ERR_OK;
 }
 #endif /* LWIP_TCP_PCB_NUM_EXT_ARGS */
+
+#if LWIP_STATS
+int tcp_get_pcbs(struct tcp_pcb **const**list)
+{
+  *list = tcp_pcb_lists;
+  return LWIP_ARRAYSIZE(tcp_pcb_lists);
+}
+#endif
 
 #endif /* LWIP_TCP */

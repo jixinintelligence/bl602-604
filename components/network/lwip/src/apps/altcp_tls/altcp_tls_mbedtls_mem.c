@@ -203,6 +203,7 @@ void
 altcp_mbedtls_free_config(void *item)
 {
   LWIP_ASSERT("item != NULL", item != NULL);
+  mbedtls_ssl_config_free(item);
   mem_free(item);
 }
 

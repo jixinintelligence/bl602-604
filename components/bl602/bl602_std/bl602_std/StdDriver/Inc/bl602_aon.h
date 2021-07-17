@@ -93,10 +93,11 @@ BL_Err_Type AON_Power_Off_LDO15_RF(void);
 BL_Err_Type AON_Power_On_SFReg(void);
 BL_Err_Type AON_Power_Off_SFReg(void);
 /*----------*/
-uint8_t AON_Trim_Parity(uint32_t val,uint8_t len);
-/*----------*/
 BL_Err_Type AON_LowPower_Enter_PDS0(void);
 BL_Err_Type AON_LowPower_Exit_PDS0(void);
+/*----------*/
+BL_Err_Type AON_Set_LDO11_SOC_Sstart_Delay(uint8_t delay);
+/*----------*/;
 
 /*@} end of group AON_Public_Functions */
 

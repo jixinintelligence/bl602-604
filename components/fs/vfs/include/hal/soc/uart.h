@@ -54,6 +54,14 @@ typedef enum {
 } hal_uart_mode_t;
 
 /*
+ * UART int type
+ */
+typedef enum {
+    UART_TX_INT,
+    UART_RX_INT,
+} hal_uart_int_t;
+
+/*
  * UART configuration
  */
 typedef struct {
@@ -71,14 +79,10 @@ typedef struct {
 typedef struct {
     uint8_t       port;    /* uart port */
     uart_config_t config;  /* uart config */
-    /*ringbuffer for UART read*/
-    uint8_t      ring_rx_buffer[128];
-    uint8_t      ring_rx_idx_read;
-    uint8_t      ring_rx_idx_write;
-    /*ringbuffer for UART write*/
-    uint8_t      ring_tx_buffer[128];
-    uint8_t      ring_tx_idx_read;
-    uint8_t      ring_tx_idx_write;
+    void         *rx_ringbuf_handle;
+    void         *tx_ringbuf_handle;
+    uint32_t     rx_buf_size;
+    uint32_t     tx_buf_size;
     void         *mutex;
     void         *poll_cb;
     void         *fd;
@@ -153,6 +157,15 @@ int32_t hal_uart_send(uart_dev_t *uart, const void *data, uint32_t size, uint32_
 int32_t hal_uart_send_trigger(uart_dev_t *uart);
 
 /**
+ * Transmit data Trigger off a UART interface
+ *
+ * @param[in]  uart     the UART interface
+ *
+ * @return  0 : on success, EIO : if an error occurred with any step
+ */
+int32_t hal_uart_send_trigger_off(uart_dev_t *uart);
+
+/**
  * Receive data on a UART interface
  *
  * @param[in]   uart         the UART interface
@@ -193,20 +206,22 @@ int32_t hal_uart_finalize(uart_dev_t *uart);
  * Register notify on a UART interface
  *
  * @param[in]  uart  the interface which notify should be noticed
+ * @param[in]  type  the uart int type
  * @param[in]  cb    call back function
  *
  * @return  0 : on success, EIO : if an error occurred with any step
  */
-int32_t hal_uart_notify_register(uart_dev_t *uart, void (*cb)(void *arg));
+int32_t hal_uart_notify_register(uart_dev_t *uart, hal_uart_int_t type, void (*cb)(void *arg));
 
 /**
  * Unregister notify on a UART interface
  *
  * @param[in]  uart  the interface which notify should be noticed
+ * @param[in]  type  the uart int type
  *
  * @return  0 : on success, EIO : if an error occurred with any step
  */
-int32_t hal_uart_notify_unregister(uart_dev_t *uart, void (*cb)(void *arg));
+int32_t hal_uart_notify_unregister(uart_dev_t *uart, hal_uart_int_t type, void (*cb)(void *arg));
 
 #endif /* HAL_UART_H */
 

@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 /* conn.c - Bluetooth connection handling */
 
 /*
@@ -74,9 +45,13 @@ struct tx_meta {
 
 #define tx_data(buf) ((struct tx_meta *)net_buf_user_data(buf))
 
+#if !defined(BFLB_DYNAMIC_ALLOC_MEM)
 NET_BUF_POOL_DEFINE(acl_tx_pool, CONFIG_BT_L2CAP_TX_BUF_COUNT,
 		    BT_L2CAP_BUF_SIZE(CONFIG_BT_L2CAP_TX_MTU),
 		    sizeof(struct tx_meta), NULL);
+#else
+struct net_buf_pool acl_tx_pool;
+#endif
 
 #if CONFIG_BT_L2CAP_TX_FRAG_COUNT > 0
 
@@ -86,6 +61,7 @@ NET_BUF_POOL_DEFINE(acl_tx_pool, CONFIG_BT_L2CAP_TX_BUF_COUNT,
 #define FRAG_SIZE BT_L2CAP_BUF_SIZE(CONFIG_BT_L2CAP_TX_MTU)
 #endif
 
+#if !defined(BFLB_DYNAMIC_ALLOC_MEM)
 /* Dedicated pool for fragment buffers in case queued up TX buffers don't
  * fit the controllers buffer size. We can't use the acl_tx_pool for the
  * fragmentation, since it's possible that pool is empty and all buffers
@@ -94,7 +70,9 @@ NET_BUF_POOL_DEFINE(acl_tx_pool, CONFIG_BT_L2CAP_TX_BUF_COUNT,
  */
 NET_BUF_POOL_FIXED_DEFINE(frag_pool, CONFIG_BT_L2CAP_TX_FRAG_COUNT, FRAG_SIZE,
 			  NULL);
-
+#else
+struct net_buf_pool frag_pool;
+#endif
 #endif /* CONFIG_BT_L2CAP_TX_FRAG_COUNT > 0 */
 
 /* How long until we cancel HCI_LE_Create_Connection */
@@ -417,7 +395,7 @@ static struct bt_conn *conn_new(void)
 	return conn;
 }
 
-#if defined(CFG_SLEEP)
+#if defined(BFLB_BLE)
 bool le_check_valid_conn(void)
 {
     int i;
@@ -430,6 +408,20 @@ bool le_check_valid_conn(void)
 
     return false;
 }
+
+#if defined(BFLB_HOST_ASSISTANT)
+void bt_notify_disconnected(void)
+{
+    int i;
+
+    for(i= 0; i < ARRAY_SIZE(conns); i++){
+        if(atomic_get(&conns[i].ref)){
+			conns[i].err = BT_HCI_ERR_UNSPECIFIED;
+            notify_disconnected(&conns[i]);
+        }  
+    }
+}
+#endif//#if defined(BFLB_HOST_ASSISTANT)
 #endif
 
 #if defined(CONFIG_BT_BREDR)
@@ -1676,7 +1668,7 @@ void bt_conn_set_state(struct bt_conn *conn, bt_conn_state_t state)
 			/* TODO: Notify sco connected */
 			break;
 		}
-		k_fifo_init(&conn->tx_queue);
+		k_fifo_init(&conn->tx_queue, 20);
 		k_poll_signal_raise(&conn_change, 0);
 
 		sys_slist_init(&conn->channels);
@@ -1952,6 +1944,21 @@ int bt_conn_get_info(const struct bt_conn *conn, struct bt_conn_info *info)
 	}
 
 	return -EINVAL;
+}
+
+int bt_conn_get_remote_dev_info(struct bt_conn_info *info)
+{
+        int link_num = 0;
+
+        for (int i = 0; i < ARRAY_SIZE(conns); i++) {
+                if (!atomic_get(&conns[i].ref)) {
+                        continue;
+                }
+                bt_conn_get_info(&conns[i], &info[link_num]);
+                link_num ++;
+	}
+
+	return link_num;
 }
 
 static int bt_hci_disconnect(struct bt_conn *conn, u8_t reason)
@@ -2580,25 +2587,44 @@ struct bt_conn *bt_conn_lookup_id(u8_t id)
 	return bt_conn_ref(conn);
 }
 
+extern bool queue_inited;
 int bt_conn_init(void)
 {
-	int err, i;
+	#if defined(CONFIG_BT_SMP)
+	int err;
+	#endif
+	int i;
 
 #if defined(BFLB_BLE)
-    k_lifo_init(&acl_tx_pool.free);
-    k_fifo_init(&free_tx);
+#if defined(BFLB_DYNAMIC_ALLOC_MEM)
+    net_buf_init(&acl_tx_pool, CONFIG_BT_L2CAP_TX_BUF_COUNT, BT_L2CAP_BUF_SIZE(CONFIG_BT_L2CAP_TX_MTU), NULL);
+#if CONFIG_BT_L2CAP_TX_FRAG_COUNT > 0
+    net_buf_init(&frag_pool, CONFIG_BT_L2CAP_TX_FRAG_COUNT, FRAG_SIZE, NULL);
+#endif
+#else //BFLB_DYNAMIC_ALLOC_MEM
+    struct net_buf_pool num_complete_pool;
+    struct net_buf_pool acl_tx_pool;
+#if CONFIG_BT_L2CAP_TX_FRAG_COUNT > 0
+    struct net_buf_pool frag_pool;
+#endif
+#endif//BFLB_DYNAMIC_ALLOC_MEM
+    if(queue_inited == false)
+        k_lifo_init(&acl_tx_pool.free, CONFIG_BT_L2CAP_TX_BUF_COUNT);
+    k_fifo_init(&free_tx, 20);
 #endif
 	for (i = 0; i < ARRAY_SIZE(conn_tx); i++) {
 		k_fifo_put(&free_tx, &conn_tx[i]);
 	}
 
 	bt_att_init();
-
+    
+    #if defined(CONFIG_BT_SMP)
 	err = bt_smp_init();
 	if (err) {
 		return err;
 	}
-
+    #endif
+    
 	bt_l2cap_init();
 
 	/* Initialize background scan */

@@ -1,3 +1,5 @@
+include $(COMPONENT_PATH)/../ble_common.mk
+
 ##################################################################################
 #
 # Component Makefile
@@ -9,11 +11,16 @@ ble_stack_srcs_dirs := src/bl_hci_wrapper \
 					src/common/tinycrypt/source  \
 					src/hci_onchip   \
 					src/host   \
-					src/host_cmdproc   \
-					src/services
+					src/services \
+					src/sbc/dec \
+					src/sbc/enc \
 
 ifeq ($(CONFIG_BT_OAD_SERVER),1)
-ble_stack_srcs_dirs+= src/profiles/oad
+ble_stack_srcs_dirs+= src/services/oad
+endif
+
+ifeq ($(CONFIG_BT_OAD_CLIENT),1)
+ble_stack_srcs_dirs+= src/services/oad
 endif
 
 ifeq ($(CONFIG_BT_STACK_CLI),1)
@@ -25,7 +32,6 @@ ble_stack_srcs_include_dirs    += src/port/include \
 								src/common/include \
 								src/common/include/zephyr  \
 								src/common/include/misc  \
-								src/common/include/common  \
 								src/common/include/toolchain \
 								src/common/tinycrypt/include/tinycrypt  \
 								src/hci_onchip   \
@@ -34,12 +40,11 @@ ble_stack_srcs_include_dirs    += src/port/include \
 								src/include/bluetooth  \
 								src/include/drivers/bluetooth  \
 								src/profiles \
-								src/host_cmdproc \
 								src/cli_cmds \
 								src/services
 
 ifneq ($(CONFIG_BT_OAD_SERVER)_$(CONFIG_BT_OAD_CLIENT),0_0)
-ble_stack_srcs_include_dirs    += src/profiles/oad
+ble_stack_srcs_include_dirs    += src/services/oad
 endif
 
 # Component Makefile
@@ -84,13 +89,19 @@ ble_stack_srcs  := src/port/bl_port.c \
 					src/host/gatt.c \
 					src/host/hci_core.c \
 					src/host/hci_ecc.c \
-					src/host/keys.c \
 					src/host/l2cap.c \
-					src/host/smp.c \
 					src/host/uuid.c \
 					
+ifneq ($(CONFIG_DISABLE_BT_SMP), 1)
+ble_stack_srcs  += src/host/smp.c \
+                   src/host/keys.c
+endif
+ifeq ($(CONFIG_BT_DEBUG_MONITOR), 1)
+ble_stack_srcs  += src/host/monitor.c 
+endif
+				
 ifeq ($(CONFIG_BT_OAD_CLIENT),1)
-ble_stack_srcs   += src/host_cmdproc/oadc_cmdproc.c
+ble_stack_srcs   += src/services/oad/oad_client.c
 endif
 
 ifneq ($(CONFIG_DBG_RUN_ON_FPGA), 1)
@@ -98,12 +109,14 @@ ble_stack_srcs   += src/host/settings.c
 endif
 
 ifeq ($(CONFIG_BT_OAD_SERVER),1)
-ble_stack_srcs   += src/profiles/oad/oad_api.c \
-					src/profiles/oad/oad_service.c
+ble_stack_srcs   += src/services/oad/oad_main.c \
+					src/services/oad/oad_service.c
 endif
 
 ifeq ($(CONFIG_BT_STACK_CLI),1)
-ble_stack_srcs   += src/cli_cmds/stack_cli_cmds.c
+ble_stack_srcs   += src/cli_cmds/ble_cli_cmds.c \
+					src/cli_cmds/bredr_cli_cmds.c \
+					src/cli_cmds/pts_cli_cmds.c
 endif
 
 ifeq ($(CONFIG_BT_BAS_SERVER),1)
@@ -118,20 +131,63 @@ ifeq ($(CONFIG_BT_DIS_SERVER),1)
 ble_stack_srcs   += src/services/dis.c
 endif
 
-ifeq ($(CONFIG_BT_WIFIPROV_SERVER),1)
-ble_stack_srcs   += src/services/wifi_prov.c
+ifeq ($(CONFIG_HOGP_SERVER),1)
+ble_stack_srcs   += src/services/hog.c
 endif
 
 ifeq ($(CONFIG_BLE_TP_SERVER),1)
 ble_stack_srcs   += src/services/ble_tp_svc.c
 endif
 
+ifeq ($(CONFIG_BLE_MULTI_ADV),1)
+ble_stack_srcs   += src/host/multi_adv.c
+endif
+
+ble_stack_srcs   += src/host/bl_host_assist.c
+
+bredr_stack_srcs := src/host/a2dp.c \
+					src/host/at.c \
+					src/host/avdtp.c \
+					src/host/hfp_hf.c \
+					src/host/keys_br.c \
+					src/host/l2cap_br.c \
+					src/host/rfcomm.c \
+					src/host/sdp.c \
+
+sbc_codec_srcs := 	src/sbc/dec/alloc.c \
+					src/sbc/dec/bitalloc.c \
+					src/sbc/dec/bitalloc-sbc.c \
+					src/sbc/dec/bitstream-decode.c \
+					src/sbc/dec/decoder-oina.c \
+					src/sbc/dec/decoder-private.c \
+					src/sbc/dec/decoder-sbc.c \
+					src/sbc/dec/dequant.c \
+					src/sbc/dec/framing.c \
+					src/sbc/dec/framing-sbc.c \
+					src/sbc/dec/oi_codec_version.c \
+					src/sbc/dec/synthesis-8-generated.c \
+					src/sbc/dec/synthesis-dct8.c \
+					src/sbc/dec/synthesis-sbc.c \
+					src/sbc/enc/sbc_analysis.c \
+					src/sbc/enc/sbc_dct.c \
+					src/sbc/enc/sbc_dct_coeffs.c \
+					src/sbc/enc/sbc_enc_bit_alloc_mono.c \
+					src/sbc/enc/sbc_enc_bit_alloc_ste.c \
+					src/sbc/enc/sbc_enc_coeffs.c \
+					src/sbc/enc/sbc_encoder.c \
+					src/sbc/enc/sbc_packing.c \
+
+sbc_codec_include_dirs := 	src/sbc/dec \
+							src/sbc/enc \
+
 COMPONENT_SRCS := $(ble_stack_srcs)
+
+ifeq ($(CONFIG_BT_BREDR),1)
+COMPONENT_SRCS += $(bredr_stack_srcs)
+COMPONENT_SRCS += $(sbc_codec_srcs)
+COMPONENT_ADD_INCLUDEDIRS += $(sbc_codec_include_dirs)
+endif
 
 COMPONENT_OBJS   := $(patsubst %.c,%.o, $(COMPONENT_SRCS))
 
 COMPONENT_SRCDIRS := $(ble_stack_srcs_dirs)
-
-
-
-include $(COMPONENT_PATH)/../ble_common.mk

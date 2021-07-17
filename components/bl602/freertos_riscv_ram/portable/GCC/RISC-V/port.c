@@ -151,6 +151,7 @@ extern void xPortStartFirstTask( void );
 	}
 	#endif /* configASSERT_DEFINED */
 
+#if 1
 	/* If there is a CLINT then it is ok to use the default implementation
 	in this file, otherwise vPortSetupTimerInterrupt() must be implemented to
 	configure whichever clock is to be used to generate the tick interrupt. */
@@ -169,6 +170,13 @@ extern void xPortStartFirstTask( void );
 		__asm volatile( "csrs mie, %0" :: "r"(0x800) );
 	}
 	#endif /* configCLINT_BASE_ADDRESS */
+#else
+int bl_timer_tick_enable(void);
+    bl_timer_tick_enable();
+    /* Enable external interrupts. */
+    __asm volatile( "csrs mie, %0" :: "r"(0x800) );
+
+#endif
 
     /*Enable mtimer interrrupt*/
     *(volatile uint8_t*)configCLIC_TIMER_ENABLE_ADDRESS = 1;

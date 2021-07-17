@@ -108,7 +108,7 @@ static intCallback_Type * irIntCbfArra[IR_INT_ALL]= {NULL,NULL};
  *
 *******************************************************************************/
 #ifndef BL602_USE_HAL_DRIVER
-void __IRQ IRRX_IRQHandler(void)
+void IRRX_IRQHandler(void)
 {
     uint32_t tmpVal;
     
@@ -131,7 +131,7 @@ void __IRQ IRRX_IRQHandler(void)
  *
 *******************************************************************************/
 #ifndef BL602_USE_HAL_DRIVER
-void __IRQ IRTX_IRQHandler(void)
+void IRTX_IRQHandler(void)
 {
     uint32_t tmpVal;
     
@@ -178,7 +178,10 @@ BL_Err_Type IR_TxInit(IR_TxCfg_Type *irTxCfg)
     
     /* Write back */
     BL_WR_REG(IR_BASE,IRTX_CONFIG,tmpVal);
-    
+
+#ifndef BFLB_USE_HAL_DRIVER
+    //Interrupt_Handler_Register(IRTX_IRQn,IRTX_IRQHandler);
+#endif
     return SUCCESS;
 }
 
@@ -295,7 +298,11 @@ BL_Err_Type IR_RxInit(IR_RxCfg_Type *irRxCfg)
     tmpVal = BL_SET_REG_BITS_VAL(tmpVal,IR_CR_IRRX_DATA_TH,irRxCfg->dataThreshold-1);
     /* Write back */
     BL_WR_REG(IR_BASE,IRRX_PW_CONFIG,tmpVal);
-    
+
+#ifndef BFLB_USE_HAL_DRIVER
+    //Interrupt_Handler_Register(IRRX_IRQn,IRRX_IRQHandler);
+#endif
+
     return SUCCESS;
 }
 
@@ -580,6 +587,24 @@ BL_Err_Type IR_SWMSendCommand(uint16_t* data,uint8_t length)
 }
 
 /****************************************************************************//**
+ * @brief  IR send in NEC protocol
+ *
+ * @param  address: Address
+ * @param  command: Command
+ *
+ * @return SUCCESS
+ *
+*******************************************************************************/
+BL_Err_Type IR_SendNEC(uint8_t address,uint8_t command)
+{
+    uint32_t tmpVal = ((~command&0xff)<<24)+(command<<16)+((~address&0xff)<<8)+address;
+    
+    IR_SendCommand(0,tmpVal);
+    
+    return SUCCESS;
+}
+
+/****************************************************************************//**
  * @brief  IR interrupt mask or unmask function
  *
  * @param  intType: IR interrupt type
@@ -765,6 +790,29 @@ uint8_t IR_SWMReceiveData(uint16_t* data,uint8_t length)
         data[rxLen++] = BL_RD_REG(IR_BASE,IRRX_SWM_FIFO_RDATA)&0xffff;
     }
     return rxLen;
+}
+
+/****************************************************************************//**
+ * @brief  IR receive in NEC protocol
+ *
+ * @param  address: Address
+ * @param  command: Command
+ *
+ * @return SUCCESS or ERROR
+ *
+*******************************************************************************/
+BL_Err_Type IR_ReceiveNEC(uint8_t* address,uint8_t* command)
+{
+    uint32_t tmpVal = IR_ReceiveData(IR_WORD_0);
+    
+    *address = tmpVal&0xff;
+    *command = (tmpVal>>16)&0xff;
+    
+    if((~(*address)&0xff) != ((tmpVal>>8)&0xff) || (~(*command)&0xff) != ((tmpVal>>24)&0xff)){
+        return ERROR;
+    }
+    
+    return SUCCESS;
 }
 
 /****************************************************************************//**
@@ -1001,7 +1049,85 @@ BL_Err_Type IR_LearnToSend(IR_RxMode_Type mode,uint32_t* data,uint8_t length)
     }
     
     return SUCCESS;
-} 
+}
+
+
+/****************************************************************************//**
+ * @brief  IR init to control led function
+ *
+ * @param  clk: Clock source
+ * @param  div: Clock division(1~64)
+ * @param  unit: Pulse width unit(multiples of clock pulse width, 1~4096)
+ * @param  code0H: code 0 high level time(multiples of pulse width unit, 1~16)
+ * @param  code0L: code 0 low level time(multiples of pulse width unit, 1~16)
+ * @param  code1H: code 1 high level time(multiples of pulse width unit, 1~16)
+ * @param  code1L: code 1 low level time(multiples of pulse width unit, 1~16)
+ *
+ * @return SUCCESS
+ *
+*******************************************************************************/
+BL_Sts_Type IR_LEDInit(HBN_XCLK_CLK_Type clk,uint8_t div,uint8_t unit,uint8_t code0H,uint8_t code0L,uint8_t code1H,uint8_t code1L)
+{
+    IR_TxCfg_Type txCfg = {
+        24,                                                  /* 24-bit data */
+        DISABLE,                                             /* Disable signal of tail pulse inverse */
+        DISABLE,                                             /* Disable signal of tail pulse */
+        DISABLE,                                             /* Disable signal of head pulse inverse */
+        DISABLE,                                             /* Disable signal of head pulse */
+        DISABLE,                                             /* Disable signal of logic 1 pulse inverse */
+        DISABLE,                                             /* Disable signal of logic 0 pulse inverse */
+        ENABLE,                                              /* Enable signal of data pulse */
+        DISABLE,                                             /* Disable signal of output modulation */
+        ENABLE                                               /* Enable signal of output inverse */
+    };
+    
+    IR_TxPulseWidthCfg_Type txPWCfg = {
+        code0L,                                              /* Pulse width of logic 0 pulse phase 1 */
+        code0H,                                              /* Pulse width of logic 0 pulse phase 0 */
+        code1L,                                              /* Pulse width of logic 1 pulse phase 1 */
+        code1H,                                              /* Pulse width of logic 1 pulse phase 0 */
+        1,                                                   /* Pulse width of head pulse phase 1 */
+        1,                                                   /* Pulse width of head pulse phase 0 */
+        1,                                                   /* Pulse width of tail pulse phase 1 */
+        1,                                                   /* Pulse width of tail pulse phase 0 */
+        1,                                                   /* Modulation phase 1 width */
+        1,                                                   /* Modulation phase 0 width */
+        unit                                                 /* Pulse width unit */
+    };
+    
+    HBN_Set_XCLK_CLK_Sel(clk);
+    GLB_Set_IR_CLK(ENABLE,GLB_IR_CLK_SRC_XCLK,div-1);
+    
+    /* Disable ir before config */
+    IR_Disable(IR_TXRX);
+
+    /* IR tx init */
+    IR_TxInit(&txCfg);
+    IR_TxPulseWidthConfig(&txPWCfg);
+    
+    return SUCCESS;
+}
+
+
+/****************************************************************************//**
+ * @brief  IR send 24-bit data to control led function
+ *
+ * @param  data: Data to send(24-bit)
+ *
+ * @return SUCCESS
+ *
+*******************************************************************************/
+BL_Sts_Type IR_LEDSend(uint32_t data)
+{
+    /* Change MSB_first to LSB_first */
+    data = ((data>>1)&0x55555555)|((data<<1)&0xaaaaaaaa);
+    data = ((data>>2)&0x33333333)|((data<<2)&0xcccccccc);
+    data = ((data>>4)&0x0f0f0f0f)|((data<<4)&0xf0f0f0f0);
+    data = ((data>>16)&0xff)|(data&0xff00)|((data<<16)&0xff0000);
+    IR_SendCommand(0,data);
+    
+    return SUCCESS;
+}
 
 
 /*@} end of group IR_Public_Functions */

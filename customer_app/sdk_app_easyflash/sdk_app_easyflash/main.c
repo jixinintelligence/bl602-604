@@ -56,6 +56,7 @@
 #include <hal_board.h>
 #include <bl_sys_time.h>
 #include <bl_romfs.h>
+#include <bl_sys.h>
 #include <fdt.h>
 
 #include <easyflash.h>
@@ -76,12 +77,12 @@ static HeapRegion_t xHeapRegions[] =
         { NULL, 0 } /* Terminates the array. */
 };
 
-void user_vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName )
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName )
 {
     /*empty*/
 }
 
-void user_vApplicationMallocFailedHook(void)
+void vApplicationMallocFailedHook(void)
 {
     printf("Memory Allocate Failed. Current left size is %d bytes\r\n",
         xPortGetFreeHeapSize()
@@ -89,7 +90,7 @@ void user_vApplicationMallocFailedHook(void)
     /*empty*/
 }
 
-void user_vApplicationIdleHook(void)
+void vApplicationIdleHook(void)
 {
     __asm volatile(
             "   wfi     "
@@ -154,7 +155,7 @@ static void aos_loop_proc(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-void user_vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize)
+void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize)
 {
     /* If the buffers to be provided to the Idle task are declared inside this
     function then they must be declared static - otherwise they will be allocated on
@@ -178,7 +179,7 @@ void user_vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, Sta
 /* configSUPPORT_STATIC_ALLOCATION and configUSE_TIMERS are both set to 1, so the
 application must provide an implementation of vApplicationGetTimerTaskMemory()
 to provide the memory that is used by the Timer service task. */
-void user_vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackType_t **ppxTimerTaskStackBuffer, uint32_t *pulTimerTaskStackSize)
+void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackType_t **ppxTimerTaskStackBuffer, uint32_t *pulTimerTaskStackSize)
 {
     /* If the buffers to be provided to the Timer task are declared inside this
     function then they must be declared static - otherwise they will be allocated on
@@ -199,7 +200,7 @@ void user_vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, S
     *pulTimerTaskStackSize = configTIMER_TASK_STACK_DEPTH;
 }
 
-void user_vAssertCalled(void)
+void vAssertCalled(void)
 {
     volatile uint32_t ulSetTo1ToExitFunction = 0;
 
@@ -260,22 +261,6 @@ static void system_thread_init()
     /*nothing here*/
 }
 
-static void __update_rom_api(void)
-{
-    struct romapi_freertos_map *romapi_freertos;
-
-    romapi_freertos = hal_sys_romapi_get();
-
-    romapi_freertos->vApplicationIdleHook = user_vApplicationIdleHook;
-    romapi_freertos->vApplicationGetIdleTaskMemory = user_vApplicationGetIdleTaskMemory;
-    romapi_freertos->vApplicationStackOverflowHook = user_vApplicationStackOverflowHook;
-    romapi_freertos->vApplicationGetTimerTaskMemory = user_vApplicationGetTimerTaskMemory;
-    romapi_freertos->vApplicationMallocFailedHook = user_vApplicationMallocFailedHook;
-    romapi_freertos->vAssertCalled = user_vAssertCalled;
-
-    hal_sys_romapi_update(romapi_freertos);
-}
-
 static void proc_hellow_entry(void *pvParameters)
 {
     vTaskDelay(500);
@@ -295,9 +280,8 @@ void bfl_main()
     /*Init UART In the first place*/
     bl_uart_init(0, 16, 7, 255, 255, 2 * 1000 * 1000);
     puts("Starting bl602 now....\r\n");
-    GLB_Set_EM_Sel(0);
+    bl_sys_init();
 
-    __update_rom_api();
     _dump_boot_info();
 
     vPortDefineHeapRegions(xHeapRegions);

@@ -10,7 +10,6 @@ COMPONENT_PRIV_INCLUDEDIRS :=
 
 ## This component's src
 COMPONENT_SRCS := src/blsync_ble.c \
-				  src/cJSON.c \
 				  src/encrypt_layer.c \
 				  src/payload.c \
 				  src/transfer.c 

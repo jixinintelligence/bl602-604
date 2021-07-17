@@ -41,7 +41,7 @@ extern "C" {
 #define MODULE_LOG_LOCK_LOCK    /* reserved */
 #define MODULE_LOG_LOCK_UNLOCK  /* reserved */
 static char log_buf[512];
-int log_buf_out(const char *file, int line, void *inbuf, int len, LOG_BUF_OUT_DATA_TYPE_T type)
+int log_buf_out(const char *file, int line, const void *inbuf, int len, LOG_BUF_OUT_DATA_TYPE_T type)
 {
     char *buf = (char *)inbuf;
     char *pbuffer = NULL;
@@ -150,17 +150,21 @@ int log_buf_out(const char *file, int line, void *inbuf, int len, LOG_BUF_OUT_DA
 
 extern void vprint(const char *fmt, va_list argp);
 
+extern volatile bool sys_log_all_enable;
+
 void bl_printk(const char *format, ...)
 {
     va_list args;
 
-    /* args point to the first variable parameter */
-    va_start(args, format);
+    if (sys_log_all_enable) {
+        /* args point to the first variable parameter */
+        va_start(args, format);
 
-    /* You can add your code under here. */
-    vprint(format, args);
+        /* You can add your code under here. */
+        vprint(format, args);
 
-    va_end(args);
+        va_end(args);
+    }
 }
 
 #ifdef __cplusplus

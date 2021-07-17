@@ -40,15 +40,20 @@ extern "C" {
 #define  CODE_WIFI_ON_GOT_IP      7
 #define  CODE_WIFI_ON_CONNECTING  8
 #define  CODE_WIFI_ON_SCAN_DONE   9
-#define  CODE_WIFI_ON_AP_STARTED  10
-#define  CODE_WIFI_ON_AP_STOPPED  11
-#define  CODE_WIFI_ON_PROV_SSID         12
-#define  CODE_WIFI_ON_PROV_BSSID        13
-#define  CODE_WIFI_ON_PROV_PASSWD       14
-#define  CODE_WIFI_ON_PROV_CONNECT      15
-#define  CODE_WIFI_ON_PROV_DISCONNECT   16
-#define  CODE_WIFI_ON_PROV_SCAN_START   17
-#define  CODE_WIFI_ON_PROV_STATE_GET    18
+#define  CODE_WIFI_ON_SCAN_DONE_ONJOIN  10
+#define  CODE_WIFI_ON_AP_STARTED        11
+#define  CODE_WIFI_ON_AP_STOPPED        12
+#define  CODE_WIFI_ON_PROV_SSID         13
+#define  CODE_WIFI_ON_PROV_BSSID        14
+#define  CODE_WIFI_ON_PROV_PASSWD       15
+#define  CODE_WIFI_ON_PROV_CONNECT      16
+#define  CODE_WIFI_ON_PROV_DISCONNECT   17
+#define  CODE_WIFI_ON_PROV_SCAN_START   18
+#define  CODE_WIFI_ON_PROV_STATE_GET    19
+#define  CODE_WIFI_ON_MGMR_DENOISE      20
+#define  CODE_WIFI_ON_AP_STA_ADD        21
+#define  CODE_WIFI_ON_AP_STA_DEL        22
+#define  CODE_WIFI_ON_EMERGENCY_MAC     23
 
 /* Network Event */
 #define EV_NETWORK EV_WIFI
@@ -85,6 +90,11 @@ extern "C" {
 #define EV_CLI                             0x0005
 #define CODE_CLI_DATA_RAW                  1
 #endif
+
+/* IR event */
+#define  EV_IR                             0x0006
+#define  CODE_IR_RECEIVE_NEC               1
+#define  CODE_IR_RECEIVE_NEC_REPEAT        2
 
 typedef struct {
     /* The time event is generated, auto filled by aos event system */

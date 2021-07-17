@@ -41,7 +41,6 @@ void blog_testc3_entry(void *arg)
     blog_info("blog_testc3 info\r\n");
     blog_warn("blog_testc3 warn\r\n");
     blog_error("blog_testc3 error\r\n");
-    blog_assert("blog_testc3 assert\r\n");
 
     while (1) {
         aos_msleep(5000);
@@ -49,7 +48,6 @@ void blog_testc3_entry(void *arg)
         blog_info("blog_testc3 info\r\n");
         blog_warn("blog_testc3 warn\r\n");
         blog_error("blog_testc3 error\r\n");
-        blog_assert("blog_testc3 assert\r\n");
     }
 }
 

@@ -1,71 +1,19 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+/*****************************************************************************************
+*
+* @file utils.c
+*
+* @brief entry
+*
+* Copyright (C) Bouffalo Lab 2019
+*
+* History: 2019-11 crealted by Lanlan Gong @ Shanghai
+*
+*****************************************************************************************/
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
-#include <string.h>
 
-void co_skip_delimits(const char **ptr, char delimits)
-{
-    while(**ptr == delimits)(*ptr)++;
-}
-
-void co_get_bytearray_from_string(char** params, uint8_t *result, int array_size)
-{
-    int i = 0;
-    char rand[3];
-
-    co_skip_delimits((const char **)params, ' ');
-    for(i=0; i < array_size; i++){
-        strncpy(rand, (const char*)*params, 2);
-        rand[2]='\0';
-        result[i] = strtol(rand, NULL, 16);
-        *params = *params + 2;
-    }
-}
-
-void co_get_uint16_from_string(char** params, uint16_t *result)
-{
-    uint8_t ret_array[2];
-    co_get_bytearray_from_string(params, ret_array, 2);
-    *result = (ret_array[0]<<8)|ret_array[1];
-}
-
-void co_get_uint32_from_string(char** params, uint32_t *result)
-{
-    uint8_t ret_array[4];
-    co_get_bytearray_from_string(params, ret_array, 4);
-    *result = (ret_array[0]<<24)|(ret_array[1]<<16)|(ret_array[2]<<8)|ret_array[3];
-}
-
-void co_reverse_bytearray(uint8_t *src, uint8_t *result, int array_size)
+void reverse_bytearray(uint8_t *src, uint8_t *result, int array_size)
 {
     for(int i=0; i < array_size;i++){
         result[array_size - i -1] = src[i];
@@ -101,3 +49,86 @@ unsigned int find_lsb_set(uint32_t data)
     }
     return (1 + count);
 }
+
+int char2hex(char c, uint8_t *x)
+{
+	if (c >= '0' && c <= '9') {
+		*x = c - '0';
+	} else if (c >= 'a' && c <= 'f') {
+		*x = c - 'a' + 10;
+	} else if (c >= 'A' && c <= 'F') {
+		*x = c - 'A' + 10;
+	} else {
+		return -1;
+	}
+
+	return 0;
+}
+
+int hex2char(uint8_t x, char *c)
+{
+	if (x <= 9) {
+		*c = x + '0';
+	} else  if (x <= 15) {
+		*c = x - 10 + 'a';
+	} else {
+		return -1;
+	}
+
+	return 0;
+}
+
+size_t bin2hex(const uint8_t *buf, size_t buflen, char *hex, size_t hexlen)
+{
+	if ((hexlen + 1) < buflen * 2) {
+		return 0;
+	}
+
+	for (size_t i = 0; i < buflen; i++) {
+		if (hex2char(buf[i] >> 4, &hex[2 * i]) < 0) {
+			return 0;
+		}
+		if (hex2char(buf[i] & 0xf, &hex[2 * i + 1]) < 0) {
+			return 0;
+		}
+	}
+
+	hex[2 * buflen] = '\0';
+	return 2 * buflen;
+}
+
+
+size_t hex2bin(const char *hex, size_t hexlen, uint8_t *buf, size_t buflen)
+{
+	uint8_t dec;
+
+	if (buflen < hexlen / 2 + hexlen % 2) {
+		return 0;
+	}
+
+	/* if hexlen is uneven, insert leading zero nibble */
+	if (hexlen % 2) {
+		if (char2hex(hex[0], &dec) < 0) {
+			return 0;
+		}
+		buf[0] = dec;
+		hex++;
+		buf++;
+	}
+
+	/* regular hex conversion */
+	for (size_t i = 0; i < hexlen / 2; i++) {
+		if (char2hex(hex[2 * i], &dec) < 0) {
+			return 0;
+		}
+		buf[i] = dec << 4;
+
+		if (char2hex(hex[2 * i + 1], &dec) < 0) {
+			return 0;
+		}
+		buf[i] += dec;
+	}
+
+	return hexlen / 2 + hexlen % 2;
+}
+

@@ -302,7 +302,7 @@ int tcpip_stack_input(void *swdesc, uint8_t status, void *hwhdr, unsigned int ms
             (void)hdr;
 
             if (hw_rxhdr->flags_sta_idx != 0xff) {
-                if (hw_rxhdr->flags_is_4addr && !bl_vif->use_4addr) {
+                if (hw_rxhdr->flags_is_4addr) {
                     printf("[RX] Trigger 4addr unexpected frame\r\n");
                 }
             }

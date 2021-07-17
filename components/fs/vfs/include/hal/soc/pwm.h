@@ -24,7 +24,7 @@ typedef struct {
  *
  * @return  0 : on success, EIO : if an error occurred with any step
  */
-int32_t hal_pwm_init(pwm_dev_t *pwm);
+int32_t hal_pwm_init_bydev(pwm_dev_t *pwm);
 
 /**
  * Starts Pulse-Width Modulation signal output on a PWM pin
@@ -33,7 +33,7 @@ int32_t hal_pwm_init(pwm_dev_t *pwm);
  *
  * @return  0 : on success, EIO : if an error occurred with any step
  */
-int32_t hal_pwm_start(pwm_dev_t *pwm);
+int32_t hal_pwm_start_bydev(pwm_dev_t *pwm);
 
 /**
  * Stops output on a PWM pin
@@ -42,7 +42,7 @@ int32_t hal_pwm_start(pwm_dev_t *pwm);
  *
  * @return  0 : on success, EIO : if an error occurred with any step
  */
-int32_t hal_pwm_stop(pwm_dev_t *pwm);
+int32_t hal_pwm_stop_bydev(pwm_dev_t *pwm);
 
 /**
  * change the para of pwm
@@ -52,10 +52,10 @@ int32_t hal_pwm_stop(pwm_dev_t *pwm);
  *
  * @return  0 : on success, EIO : if an error occurred with any step
  */
-int32_t hal_pwm_para_chg(pwm_dev_t *pwm, pwm_config_t para);
+int32_t hal_pwm_para_chg_bydev(pwm_dev_t *pwm, pwm_config_t para);
 
-int32_t hal_pwm_set_duty(pwm_dev_t *pwm, float duty);
-int32_t hal_pwm_set_freq(pwm_dev_t *pwm, uint32_t freq);
+int32_t hal_pwm_set_duty_bydev(pwm_dev_t *pwm, float duty);
+int32_t hal_pwm_set_freq_bydev(pwm_dev_t *pwm, uint32_t freq);
 /**
  * De-initialises an PWM interface, Turns off an PWM hardware interface
  *
@@ -63,6 +63,6 @@ int32_t hal_pwm_set_freq(pwm_dev_t *pwm, uint32_t freq);
  *
  * @return  0 : on success, EIO : if an error occurred with any step
  */
-int32_t hal_pwm_finalize(pwm_dev_t *pwm);
+int32_t hal_pwm_finalize_bydev(pwm_dev_t *pwm);
 
 #endif /* HAL_PWM_H */

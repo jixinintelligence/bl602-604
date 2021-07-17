@@ -1861,6 +1861,7 @@ static const ATTR_TCM_CONST_SECTION Flash_Info_t flashInfos[]={
  * @return None
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 void ATTR_TCM_SECTION SF_Cfg_Init_Ext_Flash_Gpio(uint8_t extFlashPin)
 {
@@ -1900,6 +1901,38 @@ void ATTR_TCM_SECTION SF_Cfg_Init_Ext_Flash_Gpio(uint8_t extFlashPin)
             cfg.gpioMode=GPIO_MODE_AF;
         }
         GLB_GPIO_Init(&cfg);
+    }
+}
+
+/****************************************************************************//**
+ * @brief  Init internal flash GPIO according to flash GPIO config
+ *
+ * @param  None
+ *
+ * @return None
+ *
+*******************************************************************************/
+__WEAK
+void ATTR_TCM_SECTION SF_Cfg_Init_Internal_Flash_Gpio(void)
+{
+    GLB_GPIO_Cfg_Type gpioCfg = {
+        .gpioPin = GLB_GPIO_PIN_0,
+        .gpioFun = GPIO_FUN_SWGPIO,
+        .gpioMode = GPIO_MODE_INPUT,
+        .pullType = GPIO_PULL_NONE,
+        .drive = 0,
+        .smtCtrl = 1,
+    };
+
+    /* Turn on Flash pad, GPIO23 - GPIO28 */
+    for(uint32_t pin=23;pin<29;pin++){
+        gpioCfg.gpioPin = pin;
+        if(pin==24){
+            gpioCfg.pullType = GPIO_PULL_DOWN;
+        }else{
+            gpioCfg.pullType = GPIO_PULL_NONE;
+        }
+        GLB_GPIO_Init(&gpioCfg);
     }
 }
 
@@ -1990,13 +2023,9 @@ BL_Err_Type ATTR_TCM_SECTION SF_Cfg_Get_Flash_Cfg_Need_Lock(uint32_t flashID,SPI
     uint32_t i;
     uint8_t buf[sizeof(SPI_Flash_Cfg_Type)+8];
     uint32_t crc,*pCrc;
-    uint32_t xipOffset;
 
     if(flashID==0){
-        xipOffset=SF_Ctrl_Get_Flash_Image_Offset();
-        SF_Ctrl_Set_Flash_Image_Offset(0);
         XIP_SFlash_Read_Via_Cache_Need_Lock(8+BL602_FLASH_XIP_BASE,buf,sizeof(SPI_Flash_Cfg_Type)+8);
-        SF_Ctrl_Set_Flash_Image_Offset(xipOffset);
         if(BL602_MemCmp(buf,BFLB_FLASH_CFG_MAGIC,4)==0){
             crc=BFLB_Soft_CRC32((uint8_t *)buf+4,sizeof(SPI_Flash_Cfg_Type));
             pCrc=(uint32_t *)(buf+4+sizeof(SPI_Flash_Cfg_Type));
@@ -2029,8 +2058,6 @@ BL_Err_Type ATTR_TCM_SECTION SF_Cfg_Get_Flash_Cfg_Need_Lock(uint32_t flashID,SPI
 __WEAK
 void ATTR_TCM_SECTION SF_Cfg_Init_Flash_Gpio(uint8_t flashPinCfg,uint8_t restoreDefault)
 {
-    extern void SF_Cfg_Init_Internal_Flash_Gpio(void);
-
     if(restoreDefault){
         /* Set Default first */
         SF_Ctrl_Select_Pad(SF_CTRL_EMBEDDED_SEL);
@@ -2141,6 +2168,7 @@ uint32_t ATTR_TCM_SECTION SF_Cfg_Flash_Identify(uint8_t callFromFlash,
         return (jdecId|BFLB_FLASH_ID_VALID_FLAG);
     }
 }
+#endif
 
 /*@} end of group SF_CFG_Public_Functions */
 

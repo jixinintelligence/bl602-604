@@ -5,6 +5,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+#ifndef __MESH_H__
+#define __MESH_H__
 
 #define BT_MESH_KEY_PRIMARY 0x0000
 #define BT_MESH_KEY_ANY     0xffff
@@ -15,3 +17,7 @@
 #define BT_MESH_ADDR_IS_RFU(addr) ((addr) >= 0xff00 && (addr) <= 0xfffb)
 
 struct bt_mesh_net;
+
+int bt_mesh_start(void);
+
+#endif /*__MESH_H__*/

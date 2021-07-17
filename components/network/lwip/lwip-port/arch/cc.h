@@ -34,12 +34,14 @@
 
 #include "cpu.h"
 
+typedef int sys_prot_t;
+#if 0
 typedef unsigned   char    u8_t;
 typedef signed     char    s8_t;
 typedef unsigned   short   u16_t;
 typedef signed     short   s16_t;
-typedef unsigned   long    u32_t;
-typedef signed     long    s32_t;
+typedef unsigned   int    u32_t;
+typedef signed     int s32_t;
 typedef int sys_prot_t;
 
 
@@ -51,9 +53,7 @@ typedef int sys_prot_t;
 #define X32_F "x"
 #define SZT_F "uz" 
 
-
-
-
+#endif
 
 /* define compiler specific symbols */
 #if defined (__ICCARM__)

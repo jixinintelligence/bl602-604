@@ -94,6 +94,7 @@
  * @return None
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 void ATTR_TCM_SECTION SF_Ctrl_Enable(const SF_Ctrl_Cfg_Type *cfg)
 {
@@ -445,10 +446,10 @@ void ATTR_TCM_SECTION SF_Ctrl_AES_Set_Key(uint8_t region,uint8_t *key, SF_Ctrl_A
         }
         tmpVal=SF_CTRL_SF_AES_KEY_7_OFFSET;
         while(i--){
-        	BL_WR_WORD(regionRegBase+tmpVal,__REV(BL_RDWD_FRM_BYTEP(key)));
-        	key+=4;
-        	tmpVal-=4;
-		}
+            BL_WR_WORD(regionRegBase+tmpVal,__REV(BL_RDWD_FRM_BYTEP(key)));
+            key+=4;
+            tmpVal-=4;
+        }
     }
 }
 
@@ -527,10 +528,10 @@ void ATTR_TCM_SECTION SF_Ctrl_AES_Set_Key_BE(uint8_t region,uint8_t *key, SF_Ctr
         }
         tmpVal=SF_CTRL_SF_AES_KEY_0_OFFSET;
         while(i--){
-        	BL_WR_WORD(regionRegBase+tmpVal,BL_RDWD_FRM_BYTEP(key));
-        	key+=4;
-        	tmpVal+=4;
-		}
+            BL_WR_WORD(regionRegBase+tmpVal,BL_RDWD_FRM_BYTEP(key));
+            key+=4;
+            tmpVal+=4;
+        }
     }
 }
 
@@ -554,10 +555,10 @@ void ATTR_TCM_SECTION SF_Ctrl_AES_Set_IV(uint8_t region,uint8_t *iv,uint32_t add
     if(iv!=NULL){
         tmpVal=SF_CTRL_SF_AES_IV_W3_OFFSET;
         while(i--){
-        	BL_WR_WORD(regionRegBase+tmpVal,__REV(BL_RDWD_FRM_BYTEP(iv)));
-        	iv+=4;
-        	tmpVal-=4;
-		}
+            BL_WR_WORD(regionRegBase+tmpVal,__REV(BL_RDWD_FRM_BYTEP(iv)));
+            iv+=4;
+            tmpVal-=4;
+        }
         /*
         BL_WR_REG(regionRegBase,SF_CTRL_SF_AES_IV_W3,__REV(BL_RDWD_FRM_BYTEP(iv)));
         iv+=4;
@@ -591,10 +592,10 @@ void ATTR_TCM_SECTION SF_Ctrl_AES_Set_IV_BE(uint8_t region,uint8_t *iv,uint32_t 
     if(iv!=NULL){
         tmpVal=SF_CTRL_SF_AES_IV_W0_OFFSET;
         while(i--){
-        	BL_WR_WORD(regionRegBase+tmpVal,BL_RDWD_FRM_BYTEP(iv));
-        	iv+=4;
-        	tmpVal+=4;
-		}
+            BL_WR_WORD(regionRegBase+tmpVal,BL_RDWD_FRM_BYTEP(iv));
+            iv+=4;
+            tmpVal+=4;
+        }
         /*
         BL_WR_REG(regionRegBase,SF_CTRL_SF_AES_IV_W0,BL_RDWD_FRM_BYTEP(iv));
         iv+=4;
@@ -1038,6 +1039,71 @@ BL_Sts_Type ATTR_TCM_SECTION SF_Ctrl_GetBusyState(void)
 }
 
 /****************************************************************************//**
+ * @brief  Check is serial flash controller AES enable
+ *
+ * @param  None
+ *
+ * @return Wether AES is enable
+ *
+*******************************************************************************/
+__WEAK
+uint8_t ATTR_TCM_SECTION SF_Ctrl_Is_AES_Enable(void)
+{
+    uint32_t tmpVal;
+
+    tmpVal=BL_RD_REG(SF_CTRL_BASE,SF_CTRL_SF_AES);
+    return BL_IS_REG_BIT_SET(tmpVal,SF_CTRL_SF_AES_EN);
+}
+
+/****************************************************************************//**
+ * @brief  Get flash controller clock delay value
+ *
+ * @param  None
+ *
+ * @return Clock delay value
+ *
+*******************************************************************************/
+__WEAK
+uint8_t ATTR_TCM_SECTION SF_Ctrl_Get_Clock_Delay(void)
+{
+    uint32_t tmpVal;
+
+    tmpVal=BL_RD_REG(SF_CTRL_BASE,SF_CTRL_0);
+
+    if(BL_GET_REG_BITS_VAL(tmpVal,SF_CTRL_SF_IF_READ_DLY_EN)==0){
+        return 0;
+    }else{
+        return BL_GET_REG_BITS_VAL(tmpVal,SF_CTRL_SF_IF_READ_DLY_N) +1;
+    }
+}
+
+/****************************************************************************//**
+ * @brief  Set flash controller clock delay value
+ *
+ * @param  delay: Clock delay value
+ *
+ * @return None
+ *
+*******************************************************************************/
+__WEAK
+void ATTR_TCM_SECTION SF_Ctrl_Set_Clock_Delay(uint8_t delay)
+{
+    uint32_t tmpVal;
+
+    tmpVal=BL_RD_REG(SF_CTRL_BASE,SF_CTRL_0);
+
+    if(delay>0){
+        tmpVal=BL_SET_REG_BIT(tmpVal,SF_CTRL_SF_IF_READ_DLY_EN);
+        tmpVal=BL_SET_REG_BITS_VAL(tmpVal,SF_CTRL_SF_IF_READ_DLY_N,delay-1);
+    }else{
+        tmpVal=BL_CLR_REG_BIT(tmpVal,SF_CTRL_SF_IF_READ_DLY_EN);
+    }
+
+    BL_WR_REG(SF_CTRL_BASE,SF_CTRL_0,tmpVal);
+}
+#endif
+
+/****************************************************************************//**
  * @brief  SF Controller interrupt handler
  *
  * @param  None
@@ -1046,7 +1112,7 @@ BL_Sts_Type ATTR_TCM_SECTION SF_Ctrl_GetBusyState(void)
  *
 *******************************************************************************/
 #ifndef BL602_USE_HAL_DRIVER
-void __IRQ SF_Ctrl_IRQHandler(void)
+void SF_Ctrl_IRQHandler(void)
 {
     /* TODO: Not implemented */
 }

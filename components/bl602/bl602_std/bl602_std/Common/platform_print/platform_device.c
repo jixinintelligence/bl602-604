@@ -21,12 +21,17 @@ static uint8_t uart_dbg_disable=0;
 
 #define BFLB_SYSTICK_INT_RATE   20
 
+#define PLATFORM_INIT_FALSE     (0)
+#define PLATFORM_INIT_TRUE      (1)
+
 static const uint8_t hexTable[16]={'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
 static volatile uint32_t systick_int_cnt=0;
 #if !((defined BOOTROM) || (defined BL602_EFLASH_LOADER))
 static Ring_Buffer_Type uartRB;
 static uint8_t uartBuf[64];
 #endif
+
+static uint32_t init_flag = PLATFORM_INIT_FALSE;
 
 /****************************************************************************//**
  * @brief  UART RX fifo ready interrupt call back function
@@ -39,19 +44,19 @@ static uint8_t uartBuf[64];
 #if !((defined BOOTROM) || (defined BL602_EFLASH_LOADER))
 static void UART_RFR_Cbf(void)
 {
-	uint8_t tmpBuf[16];
-	uint32_t len=UART_GetRxFifoCount(UART_DBG_ID);
-	Ring_Buffer_Write_Callback(&uartRB,len,(ringBuffer_Write_Callback*)UART_ReceiveData,
-			                  (void*)UART_DBG_ID);
+    uint8_t tmpBuf[16];
+    uint32_t len=UART_GetRxFifoCount(UART_DBG_ID);
+    Ring_Buffer_Write_Callback(&uartRB,len,(ringBuffer_Write_Callback*)(uint32_t)UART_ReceiveData,
+                                (void*)UART_DBG_ID);
 
-	/* Check buf is full */
-	len=UART_GetRxFifoCount(UART_DBG_ID);
-	if(len!=0&&Ring_Buffer_Get_Empty_Length(&uartRB)==0){
-		bflb_platform_printf("UART Recv Full\r\n");
-		do{
-			UART_ReceiveData(UART_DBG_ID,tmpBuf,sizeof(tmpBuf));
-		}while(UART_GetRxFifoCount(UART_DBG_ID));
-	}
+    /* Check buf is full */
+    len=UART_GetRxFifoCount(UART_DBG_ID);
+    if(len!=0&&Ring_Buffer_Get_Empty_Length(&uartRB)==0){
+        bflb_platform_printf("UART Recv Full\r\n");
+        do{
+            UART_ReceiveData(UART_DBG_ID,tmpBuf,sizeof(tmpBuf));
+        }while(UART_GetRxFifoCount(UART_DBG_ID));
+    }
 }
 #endif
 
@@ -66,41 +71,41 @@ static void UART_RFR_Cbf(void)
 #if !((defined BOOTROM) || (defined BL602_EFLASH_LOADER))
 static void UART_RTO_Cbf(void)
 {
-	uint8_t tmpBuf[16];
-	uint32_t len=UART_GetRxFifoCount(UART_DBG_ID);
-	Ring_Buffer_Write_Callback(&uartRB,len,(ringBuffer_Write_Callback*)UART_ReceiveData,
-			                  (void*)UART_DBG_ID);
+    uint8_t tmpBuf[16];
+    uint32_t len=UART_GetRxFifoCount(UART_DBG_ID);
+    Ring_Buffer_Write_Callback(&uartRB,len,(ringBuffer_Write_Callback*)(uint32_t)UART_ReceiveData,
+                                (void*)UART_DBG_ID);
 
-	/* Check buf is full */
-	len=UART_GetRxFifoCount(UART_DBG_ID);
-	if(len!=0&&Ring_Buffer_Get_Empty_Length(&uartRB)==0){
-		bflb_platform_printf("UART Recv Full\r\n");
-		do{
-			UART_ReceiveData(UART_DBG_ID,tmpBuf,sizeof(tmpBuf));
-		}while(UART_GetRxFifoCount(UART_DBG_ID));
-	}
+    /* Check buf is full */
+    len=UART_GetRxFifoCount(UART_DBG_ID);
+    if(len!=0&&Ring_Buffer_Get_Empty_Length(&uartRB)==0){
+        bflb_platform_printf("UART Recv Full\r\n");
+        do{
+            UART_ReceiveData(UART_DBG_ID,tmpBuf,sizeof(tmpBuf));
+        }while(UART_GetRxFifoCount(UART_DBG_ID));
+    }
 }
 #endif
 
 void bflb_platform_uart_dbg_init(uint32_t bdrate)
 {
-	UART_CFG_Type uart_dbg_cfg={
-	                                32*1000*1000,         /*UART clock*/
-	                                2000000,              /* baudrate  */
-	                                UART_DATABITS_8,      /* data bits  */
-	                                UART_STOPBITS_1,      /* stop bits */
-	                                UART_PARITY_NONE,     /* parity  */
-	                                DISABLE,              /* Disable auto flow control */
-	                                DISABLE,              /* rx input de-glitch function */
-	                                DISABLE,              /* Disable RTS output SW control mode */
-	                                UART_LSB_FIRST,       /* UART each data byte is send out LSB-first */
-	};
-	UART_FifoCfg_Type fifoCfg = {
-	                                16,                   /* TX FIFO threshold */
-	                                16,                   /* RX FIFO threshold */
-	                                DISABLE,              /* Disable tx dma req/ack interface */
-	                                DISABLE               /* Disable rx dma req/ack interface */
-	};
+    UART_CFG_Type uart_dbg_cfg={
+                                    32*1000*1000,         /*UART clock*/
+                                    2000000,              /* baudrate  */
+                                    UART_DATABITS_8,      /* data bits  */
+                                    UART_STOPBITS_1,      /* stop bits */
+                                    UART_PARITY_NONE,     /* parity  */
+                                    DISABLE,              /* Disable auto flow control */
+                                    DISABLE,              /* rx input de-glitch function */
+                                    DISABLE,              /* Disable RTS output SW control mode */
+                                    UART_LSB_FIRST,       /* UART each data byte is send out LSB-first */
+    };
+    UART_FifoCfg_Type fifoCfg = {
+                                    16,                   /* TX FIFO threshold */
+                                    16,                   /* RX FIFO threshold */
+                                    DISABLE,              /* Disable tx dma req/ack interface */
+                                    DISABLE               /* Disable rx dma req/ack interface */
+    };
 
     /* init debug uart gpio first */
     bflb_platform_init_uart_debug_gpio();
@@ -138,16 +143,16 @@ void bflb_platform_uart_dbg_init(uint32_t bdrate)
     UART_SetRxTimeoutValue(UART_DBG_ID,80);
 
 #if !((defined BOOTROM) || (defined BL602_EFLASH_LOADER))
-	/* UART interrupt configuration */
-	UART_IntMask(UART_DBG_ID,UART_INT_RX_FIFO_REQ,UNMASK);
-	UART_IntMask(UART_DBG_ID,UART_INT_RTO,UNMASK);
+    /* UART interrupt configuration */
+    UART_IntMask(UART_DBG_ID,UART_INT_RX_FIFO_REQ,UNMASK);
+    UART_IntMask(UART_DBG_ID,UART_INT_RTO,UNMASK);
 
-	/* Install the interrupt callback function */
-	UART_Int_Callback_Install(UART_DBG_ID,UART_INT_RX_FIFO_REQ,&UART_RFR_Cbf);
-	UART_Int_Callback_Install(UART_DBG_ID,UART_INT_RTO,&UART_RTO_Cbf);
+    /* Install the interrupt callback function */
+    UART_Int_Callback_Install(UART_DBG_ID,UART_INT_RX_FIFO_REQ,&UART_RFR_Cbf);
+    UART_Int_Callback_Install(UART_DBG_ID,UART_INT_RTO,&UART_RTO_Cbf);
 
-	/* Enable UART interrupt*/
-	NVIC_EnableIRQ(UART_DBG_IRQN);
+    /* Enable UART interrupt*/
+    NVIC_EnableIRQ(UART_DBG_IRQN);
 #endif
     /* enable uart */
     UART_Enable(UART_DBG_ID,UART_TXRX);
@@ -254,12 +259,8 @@ uint64_t  bflb_platform_get_time_ms()
         }
     }while(tmpValLow>tmpValLow1||tmpValHigh>tmpValHigh1);
 
-#ifdef BOOTROM
-    tmp=(SystemCoreClockGet()>>3)/1000;
-    tmp=tmp/(GLB_Get_BCLK_Div()+1);
-#else
-    tmp=32;
-#endif
+    tmp=(SystemCoreClockGet()/(GLB_Get_BCLK_Div()+1));
+    tmp=(tmp>>3)/1000;
 
     if(tmpValHigh1==0){
         return(uint64_t)(tmpValLow1/tmp);
@@ -278,15 +279,25 @@ void bflb_platform_stop_time()
 
 }
 
+void bflb_platform_set_alarm_time(uint64_t time)
+{
+    uint32_t tmp;
+
+    tmp=(SystemCoreClockGet()/(GLB_Get_BCLK_Div()+1));
+    tmp=(tmp>>3)/1000;
+
+    time = time*tmp;
+
+    *(volatile uint64_t*) (CLIC_CTRL_ADDR + CLIC_MTIMECMP) = (*(volatile uint64_t*) (CLIC_CTRL_ADDR + CLIC_MTIME) + time) ;
+    NVIC_EnableIRQ(MTIME_IRQn);
+}
+
 void bflb_platform_init_time()
 {
     NVIC_DisableIRQ(MTIME_IRQn);
     /* Set MTimer the same frequency as SystemCoreClock */
-#ifdef BOOTROM
-    GLB_Set_MTimer_CLK(1,GLB_MTIMER_CLK_CPU_CLK,7);
-#else
-    GLB_Set_MTimer_CLK(1,GLB_MTIMER_CLK_32K,0);
-#endif
+
+    GLB_Set_MTimer_CLK(1,GLB_MTIMER_CLK_BCLK,7);
 
     bflb_platform_clear_time();
 }
@@ -313,49 +324,35 @@ void bflb_platform_delay_ms(uint32_t time)
     }
 }
 
-void ATTR_TCM_SECTION Update_System_CLock(void)
-{
-    typedef void( *pFunc )( void );
-    extern pFunc __Vectors[];
-    uint8_t *p=((uint8_t *)&__Vectors[8]+0);
-    SF_Ctrl_Cfg_Type sfCtrlCfg;
-
-    sfCtrlCfg.owner=SF_CTRL_OWNER_IAHB,
-    sfCtrlCfg.clkDelay=1;
-    sfCtrlCfg.clkInvert=1;
-    sfCtrlCfg.rxClkInvert=1;
-    sfCtrlCfg.doDelay=0;
-    sfCtrlCfg.diDelay=0;
-    sfCtrlCfg.oeDelay=0;
-
-
-    if(*p<=GLB_PLL_XTAL_RC32M){
-        GLB_Set_System_CLK(*p,GLB_SYS_CLK_PLL160M);
-    }
-    GLB_Set_SF_CLK(1, GLB_SFLASH_CLK_80M, 0);
-    SFlash_Init(&sfCtrlCfg);
-}
-
 void bflb_platform_init(uint32_t baudrate)
 {
-#ifndef BOOTROM
-    Update_System_CLock();
-#endif
-
+    if(PLATFORM_INIT_FALSE!=init_flag){
+        return ;
+    }
+    init_flag = PLATFORM_INIT_TRUE;
+    
     bflb_platform_init_time();
-
+    
     Sec_Eng_Trng_Enable();
-
+    
     if(!uart_dbg_disable){
         bflb_platform_uart_dbg_init(baudrate);
-        bflb_platform_prints("system clock=");
-        bflb_platform_printx(SystemCoreClockGet()/1000000);
+        bflb_platform_printf("system clock=%dM\r\n",SystemCoreClockGet()/1000000);
     }
 }
 
 
 void bflb_platform_deinit()
 {
+    if(PLATFORM_INIT_FALSE==init_flag){
+        return ;
+    }
+    init_flag = PLATFORM_INIT_FALSE;
+    
+    bflb_platform_deinit_time();
+    
+    Sec_Eng_Trng_Disable();
+    
     if(!uart_dbg_disable){
         bflb_platform_uart_dbg_deinit();
     }
@@ -396,7 +393,7 @@ int bflb_platform_get_input(uint8_t *data,uint32_t maxLen)
     uint32_t retLen=Ring_Buffer_Get_Length(&uartRB);
 
     if(retLen>maxLen){
-    	retLen=maxLen;
+        retLen=maxLen;
     }
 
     return Ring_Buffer_Read(&uartRB,data,retLen);

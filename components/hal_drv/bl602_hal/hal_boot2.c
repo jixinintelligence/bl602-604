@@ -35,6 +35,9 @@
 #include "bl_flash.h"
 #include "hal_boot2.h"
 
+#include <blog.h>
+#define USER_UNUSED(a) ((void)(a))
+
 #define PARTITION_BOOT2_RAM_ADDR_ACTIVE (0x42049C00)
 #define PARTITION_HEADER_BOOT2_RAM_ADDR (0x42049C04)
 #define PARTITION_BOOT2_FLASH_HEADER    (0x42049d14)
@@ -73,27 +76,39 @@ static void _dump_partition(void)
     int i;
     PtTable_Stuff_Config *part = &boot2_partition_table.table;
 
-    printf("======= PtTable_Config @%p=======\r\n", part);
-    printf("magicCode 0x%08X;", (unsigned int)(part->ptTable.magicCode));
-    printf(" version 0x%04X;", part->ptTable.version);
-    printf(" entryCnt %u;", part->ptTable.entryCnt);
-    printf(" age %lu;", part->ptTable.age);
-    printf(" crc32 0x%08X\r\n", (unsigned int)part->ptTable.crc32);
+    USER_UNUSED(i);
+    USER_UNUSED(part);
 
-    printf("idx  type device activeIndex     name   Address[0]  Address[1]  Length[0]   Length[1]   age\r\n");
+    blog_info("======= PtTable_Config @%p=======\r\n", part);
+    blog_info("magicCode 0x%08X;", (unsigned int)(part->ptTable.magicCode));
+    blog_info_raw(" version 0x%04X;", part->ptTable.version);
+    blog_info_raw(" entryCnt %u;", part->ptTable.entryCnt);
+    blog_info_raw(" age %lu;", part->ptTable.age);
+    blog_info_raw(" crc32 0x%08X\r\n", (unsigned int)part->ptTable.crc32);
+
+    blog_info("idx  type device activeIndex     name   Address[0]  Address[1]  Length[0]   Length[1]   age\r\n");
     for (i = 0; i < part->ptTable.entryCnt; i++) {
-        printf("[%02d] ", i);
-        printf(" %02u", part->ptEntries[i].type);
-        printf("     %u", part->ptEntries[i].device);
-        printf("         %u", part->ptEntries[i].activeIndex);
-        printf("      %8s", part->ptEntries[i].name);
-        printf("  %p", (void*)(part->ptEntries[i].Address[0]));
-        printf("  %p", (void*)(part->ptEntries[i].Address[1]));
-        printf("  %p", (void*)(part->ptEntries[i].maxLen[0]));
-        printf("  %p", (void*)(part->ptEntries[i].maxLen[1]));
-        printf("  %lu\r\n", (part->ptEntries[i].age));
+        blog_info("[%02d] ", i);
+        blog_info_raw(" %02u", part->ptEntries[i].type);
+        blog_info_raw("     %u", part->ptEntries[i].device);
+        blog_info_raw("         %u", part->ptEntries[i].activeIndex);
+        blog_info_raw("      %8s", part->ptEntries[i].name);
+        blog_info_raw("  %p", (void*)(part->ptEntries[i].Address[0]));
+        blog_info_raw("  %p", (void*)(part->ptEntries[i].Address[1]));
+        blog_info_raw("  %p", (void*)(part->ptEntries[i].maxLen[0]));
+        blog_info_raw("  %p", (void*)(part->ptEntries[i].maxLen[1]));
+        blog_info_raw("  %lu\r\n", (part->ptEntries[i].age));
     }
 }
+
+uint32_t hal_boot2_get_flash_addr(void)
+{
+    extern uint8_t __boot2_flashCfg_src;
+
+    return  (uint32_t)(&__boot2_flashCfg_src + 
+            (sizeof(boot2_partition_table.table.ptEntries[0]) * boot2_partition_table.table.ptTable.entryCnt));
+}
+
 
 int hal_boot2_partition_bus_addr(const char *name, uint32_t *addr0, uint32_t *addr1, uint32_t *size0, uint32_t *size1, int *active)
 {
@@ -236,6 +251,15 @@ uint8_t hal_boot2_get_active_partition(void)
     return boot2_partition_table.partition_active_idx;
 }
 
+int hal_boot2_get_active_entries_byname(uint8_t *name, HALPartition_Entry_Config *ptEntry_hal) 
+{
+    PtTable_Entry_Config *ptEntry = (PtTable_Entry_Config*)ptEntry_hal;
+    if (PtTable_Get_Active_Entries_By_Name(&boot2_partition_table.table, name, ptEntry)) {
+        return -1; 
+    }   
+    return 0;
+}
+
 int hal_boot2_get_active_entries(int type, HALPartition_Entry_Config *ptEntry_hal)
 {
     PtTable_Entry_Config *ptEntry = (PtTable_Entry_Config*)ptEntry_hal;
@@ -255,7 +279,7 @@ int hal_boot2_init(void)
 {
     boot2_partition_table.partition_active_idx = *(uint8_t*)PARTITION_BOOT2_RAM_ADDR_ACTIVE;
 
-    printf("[HAL] [BOOT2] Active Partition[%u] consumed %d Bytes\r\n",
+    blog_info("[HAL] [BOOT2] Active Partition[%u] consumed %d Bytes\r\n",
             boot2_partition_table.partition_active_idx,
             sizeof(PtTable_Stuff_Config)
     );
@@ -264,3 +288,29 @@ int hal_boot2_init(void)
 
     return 0;
 }
+
+#define     PT_OTA_TYPE_NAME         "FW" 
+#define     PT_MEDIA_TYPE_NAME       "mfg"
+void hal_update_mfg_ptable(void)
+{
+    PtTable_Entry_Config ptEntry_fw;
+    PtTable_Entry_Config ptEntry_media;
+
+    printf("update mfg table.\r\n");
+    printf("====================\r\n");
+    if (0 == hal_boot2_get_active_entries_byname((uint8_t *)PT_OTA_TYPE_NAME, (HALPartition_Entry_Config *)(&ptEntry_fw))) {       // ota
+        if (0 == hal_boot2_get_active_entries_byname((uint8_t *)PT_MEDIA_TYPE_NAME, (HALPartition_Entry_Config *)(&ptEntry_media))) { // media
+            if (ptEntry_fw.Address[1] == ptEntry_media.Address[0]) {
+                
+                memset(ptEntry_media.name, 0, sizeof(ptEntry_media.name));
+                PtTable_Update_Entry(NULL, !boot2_partition_table.partition_active_idx, &boot2_partition_table.table, &ptEntry_media);
+                
+                printf("===== update mfg partition =====\r\n");
+            }   
+        }   
+    }   
+
+    printf("====================\r\n");
+    printf("update mfg table.\r\n");
+}
+

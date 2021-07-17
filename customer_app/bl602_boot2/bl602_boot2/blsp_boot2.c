@@ -405,7 +405,7 @@ int main(void)
     uint8_t flashCfgBuf[4+sizeof(SPI_Flash_Cfg_Type)+4]={0};
 
     /* It's better not enable interrupt */
-    BLSP_Boot2_Init_Timer();
+    //BLSP_Boot2_Init_Timer();
 
     /* Set RAM Max size */
     BLSP_Boot2_Disable_Other_Cache();

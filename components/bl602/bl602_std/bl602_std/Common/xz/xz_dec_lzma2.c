@@ -1044,6 +1044,7 @@ XZ_EXTERN enum xz_ret xz_dec_lzma2_run(struct xz_dec_lzma2 *s,
 			s->lzma2.sequence = SEQ_LZMA_PREPARE;
 
 		/* Fall through */
+        __attribute__ ((fallthrough));
 
 		case SEQ_LZMA_PREPARE:
 			if (s->lzma2.compressed < RC_INIT_BYTES)
@@ -1056,6 +1057,7 @@ XZ_EXTERN enum xz_ret xz_dec_lzma2_run(struct xz_dec_lzma2 *s,
 			s->lzma2.sequence = SEQ_LZMA_RUN;
 
 		/* Fall through */
+        __attribute__ ((fallthrough));
 
 		case SEQ_LZMA_RUN:
 			/*

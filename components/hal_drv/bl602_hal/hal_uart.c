@@ -38,8 +38,7 @@
 
 #include <libfdt.h>
 
-#include <utils_log.h>
-
+#include <blog.h>
 
 typedef struct uart_priv_data {
     aos_mutex_t    mutex;
@@ -52,22 +51,25 @@ static uart_dev_t *dev_uart1 = NULL;
 static int uart_dev_malloc(uart_dev_t **pdev)
 {
     if (*pdev) {
-        log_error("arg err.\r\n");
+        blog_error("arg err.\r\n");
         return -1;
     }
 
     *pdev = pvPortMalloc(sizeof(uart_dev_t));
     if (*pdev == 0) {
-        log_error("mem err.\r\n");
+        blog_error("mem err.\r\n");
         return -1;
     }
+    memset(*pdev, 0, sizeof(uart_dev_t));
 
+    (*pdev)->read_block_flag = UART_READ_CFG_NOBLOCK;
     (*pdev)->priv = NULL;
     (*pdev)->priv = pvPortMalloc(sizeof(uart_priv_data_t));
     if ((*pdev)->priv == NULL) {
-        log_error("mem err.\r\n");
+        blog_error("mem err.\r\n");
         return -1;
     }
+    memset((*pdev)->priv, 0, sizeof(uart_priv_data_t));
 
     return 0;
 }
@@ -75,12 +77,13 @@ static int uart_dev_malloc(uart_dev_t **pdev)
 static void uart_dev_setdef(uart_dev_t **pdev, uint8_t id)
 {
     if (*pdev == NULL) {
-        log_error("mem err.\r\n");
+        blog_error("mem err.\r\n");
         return;
     }
 
     (*pdev)->port = id;
-
+    (*pdev)->read_block_flag = UART_READ_CFG_NOBLOCK;
+    
     (*pdev)->config.baud_rate = 115200;
     (*pdev)->config.data_width = DATA_WIDTH_8BIT;
     (*pdev)->config.parity = NO_PARITY;
@@ -89,13 +92,13 @@ static void uart_dev_setdef(uart_dev_t **pdev, uint8_t id)
     (*pdev)->config.mode = MODE_TX_RX;
 }
 
-static int dev_uart_init(uint8_t id, const char *path)
+static int dev_uart_init(uint8_t id, const char *path, uint32_t rx_buf_size, uint32_t tx_buf_size)
 {
     uart_dev_t **pdev = NULL;
     int ret;
 
     if ((id >= 3) || (path == 0)) {
-        log_error("arg err.\r\n");
+        blog_error("arg err.\r\n");
         return -1;
     }
 
@@ -110,7 +113,7 @@ static int dev_uart_init(uint8_t id, const char *path)
         } break;
         default:
         {
-            log_error("err.\r\n");
+            blog_error("err.\r\n");
             return -1;
         } break;
     }
@@ -118,6 +121,14 @@ static int dev_uart_init(uint8_t id, const char *path)
     if (uart_dev_malloc(pdev) != 0) {
         return -1;
     }
+    (*pdev)->rx_buf_size = rx_buf_size;
+    (*pdev)->tx_buf_size = tx_buf_size;
+   // (*pdev)->ring_rx_buffer = pvPortMalloc((*pdev)->rx_buf_size);
+   // (*pdev)->ring_tx_buffer = pvPortMalloc((*pdev)->tx_buf_size);
+
+   // if ((*pdev)->ring_rx_buffe == NULL || (*pdev)->ring_rx_buffe == NULL ) {
+   //     return -1;
+   // }
 
     uart_dev_setdef(pdev, id);
     ret = aos_register_driver(path, &uart_ops, *pdev);
@@ -131,6 +142,12 @@ static int dev_uart_init(uint8_t id, const char *path)
 int32_t hal_uart_send_trigger(uart_dev_t *uart)
 {
     bl_uart_int_tx_enable(uart->port);
+    return 0;
+}
+
+int32_t hal_uart_send_trigger_off(uart_dev_t *uart)
+{
+    bl_uart_int_tx_disable(uart->port);
     return 0;
 }
 
@@ -155,11 +172,7 @@ int32_t hal_uart_init(uart_dev_t *uart)
         uart->config.parity = EVEN_PARITY;
     }
 
-    bl_uart_int_enable(
-            uart->port,
-            uart->ring_rx_buffer, &(uart->ring_rx_idx_write), &(uart->ring_rx_idx_read),
-            uart->ring_tx_buffer, &(uart->ring_tx_idx_write), &(uart->ring_tx_idx_read)
-    );
+    bl_uart_int_enable(uart->port);
 
     return 0;
 }
@@ -178,26 +191,51 @@ int32_t hal_uart_recv_II(uart_dev_t *uart, void *data, uint32_t expect_size, uin
     return 0;
 }
 
+int32_t hal_uart_send(uart_dev_t *uart, const void *data, uint32_t size, uint32_t timeout)
+{
+    uint32_t i = 0;
+
+    while (i < size) {
+        bl_uart_data_send(uart->port, ((uint8_t*)data)[i]);
+        i++;
+    }
+    return 0;
+}
+
 int32_t hal_uart_finalize(uart_dev_t *uart)
 {
     uart_priv_data_t *data;
 
     data = uart->priv;
+    bl_uart_int_disable(uart->port);
     aos_mutex_free(&(data->mutex));
-
     return 0;
 }
 
 /*TODO better glue for ring buffer?*/
-int32_t hal_uart_notify_register(uart_dev_t *uart, void (*cb)(void *arg))
+int32_t hal_uart_notify_register(uart_dev_t *uart, hal_uart_int_t type, void (*cb)(void *arg))
 {
-    bl_uart_int_cb_notify_register(uart->port, cb, uart);
+    if (type == UART_TX_INT) {
+        bl_uart_int_tx_notify_register(uart->port, cb, uart);
+    } else if (type == UART_RX_INT) {
+        bl_uart_int_rx_notify_register(uart->port, cb, uart);
+    } else {
+        return -1;
+    }
+
     return 0;
 }
 
-int32_t hal_uart_notify_unregister(uart_dev_t *uart, void (*cb)(void *arg))
+int32_t hal_uart_notify_unregister(uart_dev_t *uart, hal_uart_int_t type, void (*cb)(void *arg))
 {
-    bl_uart_int_cb_notify_unregister(uart->port, cb, uart);
+    if (type == UART_TX_INT) {
+        bl_uart_int_tx_notify_unregister(uart->port, cb, uart);
+    } else if (type == UART_RX_INT) {
+        bl_uart_int_rx_notify_unregister(uart->port, cb, uart);
+    } else {
+        return -1;
+    }
+
     return 0;
 }
 
@@ -218,6 +256,7 @@ static void fdt_uart_module_init(const void *fdt, int uart_offset)
     const char *result = 0;
     int countindex = 0;
     int i, j;
+    uint32_t rx_buf_size, tx_buf_size;
 
     uint8_t id;
     char *path = NULL;
@@ -258,38 +297,38 @@ static void fdt_uart_module_init(const void *fdt, int uart_offset)
     for (i = 0; i < UART_MODULE_MAX; i++) {
         offset1 = fdt_subnode_offset(fdt, uart_offset, uart_node[i]);
         if (0 >= offset1) {
-            log_info("uart[%d] %s NULL.\r\n", i, uart_node[i]);
+            blog_info("uart[%d] %s NULL.\r\n", i, uart_node[i]);
             continue;
         }
 
         countindex = fdt_stringlist_count(fdt, offset1, "status");
         if (countindex != 1) {
-            log_info("uart[%d] status_countindex = %d NULL.\r\n", i, countindex);
+            blog_info("uart[%d] status_countindex = %d NULL.\r\n", i, countindex);
             continue;
         }
         result = fdt_stringlist_get(fdt, offset1, "status", 0, &lentmp);
         if ((lentmp != 4) || (memcmp("okay", result, 4) != 0)) {
-            log_info("uart[%d] status = %s\r\n", i, result);
+            blog_info("uart[%d] status = %s\r\n", i, result);
             continue;
         }
 
         /* set path */
         countindex = fdt_stringlist_count(fdt, offset1, "path");
         if (countindex != 1) {
-            log_info("uart[%d] path_countindex = %d NULL.\r\n", i, countindex);
+            blog_info("uart[%d] path_countindex = %d NULL.\r\n", i, countindex);
             continue;
         }
         result = fdt_stringlist_get(fdt, offset1, "path", 0, &lentmp);
         if ((lentmp < 0) || (lentmp > 32))
         {
-            log_info("uart[%d] path lentmp = %d\r\n", i, lentmp);
+            blog_info("uart[%d] path lentmp = %d\r\n", i, lentmp);
         }
         path = (char *)result;
 
-        /* set id */
+        /* set baudrate */
         addr_prop = fdt_getprop(fdt, offset1, "baudrate", &lentmp);
         if (addr_prop == NULL) {
-            log_info("uart[%d] baudrate NULL.\r\n", i);
+            blog_info("uart[%d] baudrate NULL.\r\n", i);
             continue;
         }
         baudrate = BL_FDT32_TO_U32(addr_prop, 0);
@@ -297,42 +336,64 @@ static void fdt_uart_module_init(const void *fdt, int uart_offset)
         /* set id */
         addr_prop = fdt_getprop(fdt, offset1, "id", &lentmp);
         if (addr_prop == NULL) {
-            log_info("uart[%d] id NULL.\r\n", i);
+            blog_info("uart[%d] id NULL.\r\n", i);
             continue;
         }
         id = BL_FDT32_TO_U8(addr_prop, 0);
 
+        /* set buffer size */
+        offset2 = fdt_subnode_offset(fdt, offset1, "buf_size");
+        if (0 >= offset2) {
+            blog_info("uart[%d] buf_size NULL, will use default.\r\n", i);
+            rx_buf_size = 512;
+            tx_buf_size = 512;
+        } else {
+            addr_prop = fdt_getprop(fdt, offset2, "rx_size", &lentmp);
+            if (addr_prop == NULL) {
+                blog_info("uart[%d] %s NULL.\r\n", i, "rx_size");
+                continue;
+            }
+            rx_buf_size = BL_FDT32_TO_U32(addr_prop, 0);
+            addr_prop = fdt_getprop(fdt, offset2, "tx_size", &lentmp);
+            if (addr_prop == NULL) {
+                blog_info("uart[%d] %s NULL.\r\n", i, "tx_size");
+                continue;
+            }
+            tx_buf_size = BL_FDT32_TO_U32(addr_prop, 0);
+        }
+        blog_info("uart[%d] rx_buf_size %d, tx_buf_size %d\r\n", i, rx_buf_size, tx_buf_size);
+
         for (j = 0; j < 4; j++) {
             offset2 = fdt_subnode_offset(fdt, offset1, "feature");
             if (0 >= offset2) {
-                log_info("uart[%d] feature NULL.\r\n", i);
+                blog_info("uart[%d] feature NULL.\r\n", i);
                 continue;
             }
             countindex = fdt_stringlist_count(fdt, offset2, feature_pin[j].featue_name);
             if (countindex != 1) {
-                log_info("uart[%d] %s countindex = %d.\r\n", i, feature_pin[j].featue_name, countindex);
+                blog_info("uart[%d] %s countindex = %d.\r\n", i, feature_pin[j].featue_name, countindex);
                 continue;
             }
             result = fdt_stringlist_get(fdt, offset2, feature_pin[j].featue_name, 0, &lentmp);
             if ((lentmp != 4) || (memcmp("okay", result, 4) != 0)) {
-                log_info("uart[%d] %s status = %s lentmp = %d\r\n", i, feature_pin[j].featue_name, result, lentmp);
+                blog_info("uart[%d] %s status = %s lentmp = %d\r\n", i, feature_pin[j].featue_name, result, lentmp);
                 continue;
             }
 
             /* get pin_name */
             offset2 = fdt_subnode_offset(fdt, offset1, "pin");
             if (0 >= offset2) {
-                log_info("uart[%d] pin NULL.\r\n", i);
+                blog_info("uart[%d] pin NULL.\r\n", i);
                 break;
             }
             addr_prop = fdt_getprop(fdt, offset2, feature_pin[j].pin_name, &lentmp);
             if (addr_prop == NULL) {
-                log_info("uart[%d] %s NULL.\r\n", i, feature_pin[j].pin_name);
+                blog_info("uart[%d] %s NULL.\r\n", i, feature_pin[j].pin_name);
                 continue;
             }
             feature_pin[j].value = BL_FDT32_TO_U8(addr_prop, 0);
         }
-        log_info("id = %d, %s = %d, %s = %d, %s = %d, %s = %d baudrate = %ld.\r\n",
+        blog_info("id = %d, %s = %d, %s = %d, %s = %d, %s = %d baudrate = %ld.\r\n",
             id,
             feature_pin[0].pin_name, feature_pin[0].value,
             feature_pin[1].pin_name, feature_pin[1].value,
@@ -346,11 +407,11 @@ static void fdt_uart_module_init(const void *fdt, int uart_offset)
         bl_uart_init(id, feature_pin[0].value, feature_pin[1].value,
             feature_pin[2].value, feature_pin[3].value, baudrate);
 
-        log_info("bl_uart_init %d ok.\r\n", id);
-        log_info("bl_uart_init %d baudrate = %ld ok.\r\n", id, baudrate);
+        blog_info("bl_uart_init %d ok.\r\n", id);
+        blog_info("bl_uart_init %d baudrate = %ld ok.\r\n", id, baudrate);
 
-        if (dev_uart_init(id, (const char *)path) != 0) {
-            log_error("dev_uart_init err.\r\n");
+        if (dev_uart_init(id, (const char *)path, rx_buf_size, tx_buf_size) != 0) {
+            blog_error("dev_uart_init err.\r\n");
         }
     }
     #undef UART_MODULE_MAX
@@ -363,8 +424,8 @@ int vfs_uart_init_simple_mode(uint8_t id, uint8_t pin_tx, uint8_t pin_rx, int ba
 
     bl_uart_init(id, pin_tx, pin_rx, 255, 255, baudrate);
 
-    if (dev_uart_init(id, path) != 0) {
-        log_error("dev_uart_init err.\r\n");
+    if (dev_uart_init(id, path, 128, 128) != 0) {
+        blog_error("dev_uart_init err.\r\n");
     }
 
     return 0;

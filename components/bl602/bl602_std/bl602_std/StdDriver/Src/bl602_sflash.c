@@ -96,6 +96,7 @@
  * @return None
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 void ATTR_TCM_SECTION SFlash_Init(const SF_Ctrl_Cfg_Type *pSfCtrlCfg)
 {
@@ -1393,6 +1394,92 @@ BL_Err_Type ATTR_TCM_SECTION SFlash_Read(SPI_Flash_Cfg_Type *flashCfg,
 
     return SUCCESS;
 }
+
+/****************************************************************************//**
+ * @brief  Read flash register with read command
+ *
+ * @param  flashCfg: Serial flash parameter configuration pointer
+ * @param  readRegCmd: read command
+ * @param  regValue: register value pointer to store data
+ * @param  regLen: register value length
+ *
+ * @return SUCCESS or ERROR
+ *
+*******************************************************************************/
+__WEAK
+BL_Err_Type ATTR_TCM_SECTION SFlash_Read_Reg_With_Cmd(SPI_Flash_Cfg_Type *flashCfg,uint8_t readRegCmd,uint8_t *regValue,uint8_t regLen)
+{
+    uint8_t * const flashCtrlBuf=(uint8_t *)SF_CTRL_BUF_BASE;
+    SF_Ctrl_Cmd_Cfg_Type flashCmd;
+    uint32_t cnt=0;
+
+    if(((uint32_t)&flashCmd)%4==0){
+        BL602_MemSet4((uint32_t *)&flashCmd,0,sizeof(flashCmd)/4);
+    }else{
+        BL602_MemSet(&flashCmd,0,sizeof(flashCmd));
+    }
+
+    flashCmd.cmdBuf[0]=readRegCmd<<24;
+    flashCmd.rwFlag=SF_CTRL_READ;
+    flashCmd.nbData=regLen;
+
+    SF_Ctrl_SendCmd(&flashCmd);
+
+    while(SET==SF_Ctrl_GetBusyState()){
+        BL602_Delay_US(1);
+        cnt++;
+        if(cnt>1000){
+            return ERROR;
+        }
+    }
+
+    BL602_MemCpy(regValue,flashCtrlBuf,regLen);
+    return SUCCESS;
+}
+
+/****************************************************************************//**
+ * @brief  Write flash register with write command
+ *
+ * @param  flashCfg: Serial flash parameter configuration pointer
+ * @param  writeRegCmd: write command
+ * @param  regValue: register value pointer storing data
+ * @param  regLen: register value length
+ *
+ * @return SUCCESS or ERROR
+ *
+*******************************************************************************/
+__WEAK
+BL_Err_Type ATTR_TCM_SECTION SFlash_Write_Reg_With_Cmd(SPI_Flash_Cfg_Type *flashCfg,uint8_t writeRegCmd,uint8_t *regValue,uint8_t regLen)
+{
+    uint8_t * const flashCtrlBuf=(uint8_t *)SF_CTRL_BUF_BASE;
+    uint32_t cnt=0;
+    SF_Ctrl_Cmd_Cfg_Type flashCmd;
+
+    if(((uint32_t)&flashCmd)%4==0){
+        BL602_MemSet4((uint32_t *)&flashCmd,0,sizeof(flashCmd)/4);
+    }else{
+        BL602_MemSet(&flashCmd,0,sizeof(flashCmd));
+    }
+    BL602_MemCpy(flashCtrlBuf,regValue,regLen);
+
+    flashCmd.cmdBuf[0]=writeRegCmd<<24;
+    flashCmd.rwFlag=SF_CTRL_WRITE;
+    flashCmd.nbData=regLen;
+
+    SF_Ctrl_SendCmd(&flashCmd);
+
+    /* take 40ms for tw(write status register) as default */
+    while(SET==SFlash_Busy(flashCfg)){
+        BL602_Delay_US(100);
+        cnt++;
+        if(cnt>400){
+            return ERROR;
+        }
+    }
+
+    return SUCCESS;
+}
+#endif
 
 /*@} end of group SFLASH_Public_Functions */
 

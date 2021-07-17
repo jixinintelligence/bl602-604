@@ -15,30 +15,14 @@ bl602_start:
 	.cfi_undefined ra
 .option push
 .option norelax
-	la gp, __global_pointer$
-.option pop
-	la sp, _sp_main
-
     /*disable IRQ*/
 	li t0, MSTATUS_MIE
 	csrc mstatus, t0
 
-#if defined(ENABLE_SMP)
-	smp_pause(t0, t1)
-#endif
+	la gp, __global_pointer$
+.option pop
+	la sp, _sp_main
 
-	/* Load data section */
-	la a0, _data_load
-	la a1, _data_run
-	la a2, _data_run_end
-	bgeu a1, a2, 2f
-1:
-	lw t0, (a0)
-	sw t0, (a1)
-	addi a0, a0, 4
-	addi a1, a1, 4
-	bltu a1, a2, 1b
-2:
 
 #ifndef RUN_IN_RAM
 	/* Load boot2 partition address */
@@ -56,7 +40,7 @@ bl602_start:
 
 
 	/* Load boot2 flashCfg address */
-	la a0, __boot2_flashCfg_src
+	jal hal_boot2_get_flash_addr
 	la a1, __boot2_flashCfg_start
 	la a2, __boot2_flashCfg_end
 	bgeu a1, a2, 2f
@@ -68,6 +52,19 @@ bl602_start:
 	bltu a1, a2, 1b
 2:
 #endif
+
+	/* Load data section */
+	la a0, _data_load
+	la a1, _data_run
+	la a2, _data_run_end
+	bgeu a1, a2, 2f
+1:
+	lw t0, (a0)
+	sw t0, (a1)
+	addi a0, a0, 4
+	addi a1, a1, 4
+	bltu a1, a2, 1b
+2:
 
 	/* Clear bss section */
 	la a0, __bss_start
@@ -122,6 +119,27 @@ bl602_start:
 	sd ra, 8(sp)
 #endif
 
+// call global obj constructors
+    la s1, __preinit_array_start
+    la s2, __preinit_array_end
+    li s3, 4
+1:
+    bgeu s1, s2, 2f
+    lw a3, (s1)
+    jalr a3
+    add s1, s1, s3
+    j 1b
+2:
+    la s1, __init_array_start
+    la s2, __init_array_end
+    li s3, 4
+1:
+    bgeu s1, s2, 2f
+    lw a3, (s1)
+    jalr a3
+    add s1, s1, s3
+    j 1b
+2:
 	/* argc = argv = 0 */
 	li a0, 0
 	li a1, 0

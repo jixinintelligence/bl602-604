@@ -98,7 +98,7 @@ static DMA_LLI_Ctrl_Type PingPongListArra[DMA_CH_MAX][2];
  *
 *******************************************************************************/
 #ifndef BL602_USE_HAL_DRIVER
-void __IRQ DMA_ALL_IRQHandler(void)
+void DMA_ALL_IRQHandler(void)
 {
     uint32_t tmpVal;
     uint32_t intClr;
@@ -165,6 +165,9 @@ void DMA_Enable(void)
     tmpVal = BL_RD_REG(DMAChs, DMA_TOP_CONFIG);
     tmpVal = BL_SET_REG_BIT(tmpVal, DMA_E);
     BL_WR_REG(DMAChs, DMA_TOP_CONFIG, tmpVal);
+#ifndef BFLB_USE_HAL_DRIVER
+    //Interrupt_Handler_Register(DMA_ALL_IRQn,DMA_ALL_IRQHandler);
+#endif
 }
 
 /****************************************************************************//**

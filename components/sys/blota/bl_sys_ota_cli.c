@@ -195,6 +195,7 @@ static void ota_tcp_cmd(char *buf, int len, int argc, char **argv)
     printf("[OTA] [TEST] activeIndex is %u, use OTA address=%08x\r\n", ptEntry.activeIndex, (unsigned int)ota_addr);
 
     printf("[OTA] [TEST] Erase flash with size %lu...", bin_size);
+    hal_update_mfg_ptable();    
     bl_mtd_erase_all(handle);
     printf("Done\r\n");
 
@@ -297,6 +298,8 @@ static void ota_tcp_cmd(char *buf, int len, int argc, char **argv)
                 printf("[OTA] [TCP] Update PARTITION, partition len is %lu\r\n", ptEntry.len);
                 hal_boot2_update_ptable(&ptEntry);
                 printf("[OTA] [TCP] Rebooting\r\n");
+                close(sockfd);
+                vTaskDelay(1000);
                 hal_reboot();
             }
         }

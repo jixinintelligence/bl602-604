@@ -126,6 +126,15 @@ typedef struct _httpc_connection {
   ip_addr_t proxy_addr;
   u16_t proxy_port;
   u8_t use_proxy;
+#define REQ_TYPE_GET   0
+#define REQ_TYPE_POST  1
+  u8_t req_type;
+  u8_t *data;
+#define CONTENT_TYPE_WWW   0 // application/x-www-form-urlencoded
+#define CONTENT_TYPE_JSON  1 // application/json
+#define CONTENT_TYPE_MULT  2 // multipart/form-data
+#define CONTENT_TYPE_TEXT  3 // text/xml
+  u8_t content_type;
   /* @todo: add username:pass? */
 
 #if LWIP_ALTCP

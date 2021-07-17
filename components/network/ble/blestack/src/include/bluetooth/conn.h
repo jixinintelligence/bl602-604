@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 /** @file
  *  @brief Bluetooth connection handling
  */
@@ -133,8 +104,11 @@ void bt_conn_foreach(int type, void (*func)(struct bt_conn *conn, void *data),
  */
 struct bt_conn *bt_conn_lookup_addr_le(u8_t id, const bt_addr_le_t *peer);
 
-#if defined(CFG_SLEEP)
+#if defined(BFLB_BLE)
 bool le_check_valid_conn(void);
+#if defined(BFLB_HOST_ASSISTANT)
+void bt_notify_disconnected(void);
+#endif
 #endif
 
 /** @brief Get destination (peer) address of a connection.
@@ -228,6 +202,14 @@ struct bt_conn_info {
  *  @return Zero on success or (negative) error code on failure.
  */
 int bt_conn_get_info(const struct bt_conn *conn, struct bt_conn_info *info);
+
+/** @brief Get connected devices' info
+ *
+ *  @param info Connection info object.
+ *
+ *  @return Connected device number.
+ */
+ int bt_conn_get_remote_dev_info(struct bt_conn_info *info);
 
 /** @brief Update the connection parameters.
  *
@@ -544,6 +526,7 @@ typedef enum{
 	SMP_AUTH_NO_BONDING_MITM_IO_DISPLAY_ONLY = 4,
 	SMP_IO_KEYBOARD_ONLY = 5,
 	SMP_IO_NO_INPUT_OUTPUT = 6,
+	SMP_PARING_INVALID_PUBLIC_KEY = 7,
 }smp_test_id;
 
 void bt_set_mitm(bool enable);

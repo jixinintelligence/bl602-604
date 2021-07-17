@@ -108,6 +108,7 @@ BL_Err_Type ATTR_CLOCK_SECTION AON_Power_On_MBG(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Power off MXX band gap
@@ -117,6 +118,7 @@ BL_Err_Type ATTR_CLOCK_SECTION AON_Power_On_MBG(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION AON_Power_Off_MBG(void)
 {
@@ -129,6 +131,7 @@ BL_Err_Type ATTR_CLOCK_SECTION AON_Power_Off_MBG(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Power on XTAL
@@ -138,6 +141,7 @@ BL_Err_Type ATTR_CLOCK_SECTION AON_Power_Off_MBG(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION AON_Power_On_XTAL(void)
 {
@@ -162,6 +166,7 @@ BL_Err_Type ATTR_CLOCK_SECTION AON_Power_On_XTAL(void)
 
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Set XTAL cap code
@@ -172,6 +177,7 @@ BL_Err_Type ATTR_CLOCK_SECTION AON_Power_On_XTAL(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION AON_Set_Xtal_CapCode(uint8_t capIn,uint8_t capOut)
 {
@@ -186,6 +192,7 @@ BL_Err_Type ATTR_CLOCK_SECTION AON_Set_Xtal_CapCode(uint8_t capIn,uint8_t capOut
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Get XTAL cap code
@@ -195,6 +202,7 @@ BL_Err_Type ATTR_CLOCK_SECTION AON_Set_Xtal_CapCode(uint8_t capIn,uint8_t capOut
  * @return Cap code
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 uint8_t ATTR_CLOCK_SECTION AON_Get_Xtal_CapCode(void)
 {
@@ -204,6 +212,7 @@ uint8_t ATTR_CLOCK_SECTION AON_Get_Xtal_CapCode(void)
 
     return BL_GET_REG_BITS_VAL(tmpVal,AON_XTAL_CAPCODE_IN_AON);
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Power off XTAL
@@ -213,6 +222,7 @@ uint8_t ATTR_CLOCK_SECTION AON_Get_Xtal_CapCode(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION AON_Power_Off_XTAL(void)
 {
@@ -235,6 +245,7 @@ BL_Err_Type ATTR_CLOCK_SECTION AON_Power_Off_XTAL(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION AON_Power_On_BG(void)
 {
@@ -249,6 +260,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_On_BG(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Power off bandgap system
@@ -258,6 +270,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_On_BG(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION AON_Power_Off_BG(void)
 {
@@ -272,6 +285,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_Off_BG(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Power on LDO11
@@ -281,6 +295,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_Off_BG(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION AON_Power_On_LDO11_SOC(void)
 {
@@ -294,6 +309,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_On_LDO11_SOC(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Power off LDO11
@@ -303,6 +319,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_On_LDO11_SOC(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION AON_Power_Off_LDO11_SOC(void)
 {
@@ -316,6 +333,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_Off_LDO11_SOC(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Power on LDO15_RF
@@ -325,6 +343,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_Off_LDO11_SOC(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION AON_Power_On_LDO15_RF(void)
 {
@@ -339,6 +358,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_On_LDO15_RF(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Power off LDO15_RF
@@ -348,6 +368,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_On_LDO15_RF(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION AON_Power_Off_LDO15_RF(void)
 {
@@ -360,6 +381,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_Off_LDO15_RF(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  power on source follow regular
@@ -369,6 +391,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_Off_LDO15_RF(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION AON_Power_On_SFReg(void)
 {
@@ -383,6 +406,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_On_SFReg(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  power off source follow regular
@@ -392,6 +416,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_On_SFReg(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION AON_Power_Off_SFReg(void)
 {
@@ -404,7 +429,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_Off_SFReg(void)
     
     return SUCCESS;
 }
-
+#endif
 
 /****************************************************************************//**
  * @brief  Power off the power can be shut down in PDS0
@@ -414,6 +439,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_Power_Off_SFReg(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION AON_LowPower_Enter_PDS0(void)
 {
@@ -438,6 +464,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_LowPower_Enter_PDS0(void)
 
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Power on the power powered down in PDS0
@@ -447,6 +474,7 @@ BL_Err_Type ATTR_TCM_SECTION AON_LowPower_Enter_PDS0(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION AON_LowPower_Exit_PDS0(void)
 {
@@ -482,7 +510,29 @@ BL_Err_Type ATTR_TCM_SECTION AON_LowPower_Exit_PDS0(void)
 
     return SUCCESS;
 }
+#endif
 
+/****************************************************************************//**
+ * @brief  Power on the power powered down in PDS0
+ *
+ * @param  delay: None
+ *
+ * @return SUCCESS or ERROR
+ *
+*******************************************************************************/
+BL_Err_Type ATTR_TCM_SECTION AON_Set_LDO11_SOC_Sstart_Delay(uint8_t delay)
+{
+    uint32_t tmpVal = 0;
+    
+    CHECK_PARAM((delay<=0x3));
+    
+    /* config ldo11soc_sstart_delay_aon */
+    tmpVal=BL_RD_REG(AON_BASE,AON_LDO11SOC_AND_DCTEST);
+    tmpVal=BL_SET_REG_BITS_VAL(tmpVal,AON_LDO11SOC_SSTART_DELAY_AON,delay);
+    BL_WR_REG(AON_BASE,AON_LDO11SOC_AND_DCTEST,tmpVal);
+
+    return SUCCESS;
+}
 
 /*@} end of group AON_Public_Functions */
 

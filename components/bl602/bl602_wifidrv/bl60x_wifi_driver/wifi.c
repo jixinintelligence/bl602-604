@@ -138,18 +138,22 @@ static void netif_status_callback(struct netif *netif)
                 "  IP: %s\r\n", ip4addr_ntoa(netif_ip4_addr(netif)));
     os_printf("  MK: %s\r\n", ip4addr_ntoa(netif_ip4_netmask(netif)));
     os_printf("  GW: %s\r\n", ip4addr_ntoa(netif_ip4_gw(netif)));
-    wifi_mgmr_api_ip_got(
-        netif_ip4_addr(netif)->addr,
-        netif_ip4_netmask(netif)->addr,
-        netif_ip4_gw(netif)->addr,
-        ((const ip4_addr_t*)ip_2_ip4(dns_getserver(0)))->addr,
-        ((const ip4_addr_t*)ip_2_ip4(dns_getserver(1)))->addr
-    );
+    if (ip4_addr_isany(netif_ip4_addr(netif))) {
+        wifi_mgmr_api_ip_update();
+    } else {
+        wifi_mgmr_api_ip_got(
+            netif_ip4_addr(netif)->addr,
+            netif_ip4_netmask(netif)->addr,
+            netif_ip4_gw(netif)->addr,
+            ((const ip4_addr_t*)ip_2_ip4(dns_getserver(0)))->addr,
+            ((const ip4_addr_t*)ip_2_ip4(dns_getserver(1)))->addr
+        );
+    }
 }
 
 err_t bl606a0_wifi_netif_init(struct netif *netif)
 {
-    netif->hostname = "bl606a0";
+    netif->hostname = wifiMgmr.hostname;
     netif->hwaddr_len = ETHARP_HWADDR_LEN;
     /* set netif maximum transfer unit */
     netif->mtu = 1500;
@@ -177,6 +181,9 @@ int bl606a0_wifi_init(wifi_conf_t *conf)
             mac[4],
             mac[5]
     );
+    snprintf(wifiMgmr.hostname, MAX_HOSTNAME_LEN_CHECK, "Bouffalolab_%s-%02x%02x%02x", BL_CHIP_NAME, mac[3], mac[4], mac[5]);
+    wifiMgmr.hostname[MAX_HOSTNAME_LEN_CHECK - 1] = '\0';
+    os_printf("     hostname: %s\r\n", wifiMgmr.hostname);
     bl_msg_update_channel_cfg(conf->country_code);
     os_printf("-----------------------------------------------------\r\n");
     bl_wifi_clock_enable();//Enable wifi clock

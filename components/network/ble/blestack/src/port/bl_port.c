@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 #include <zephyr.h>
 #include <misc/util.h>
 #include <misc/dlist.h>
@@ -48,9 +19,10 @@
 #include "bl702.h"
 #endif
 
-void k_queue_init(struct k_queue *queue)
+extern int bl_rand();
+void k_queue_init(struct k_queue *queue, int size)
 {
-    int size = 20;
+    //int size = 20;
     uint8_t blk_size = sizeof(void *) + 1;
 
 
@@ -92,7 +64,15 @@ void k_queue_append_from_isr(struct k_queue *queue, void *data)
 
 void k_queue_free(struct k_queue *queue)
 {
+    if(NULL == queue || NULL == queue->hdl)
+    {
+        BT_ERR("Queue is NULL\n");
+        return;
+    }
+    
     vQueueDelete(queue->hdl);
+    queue->hdl = NULL;
+    return;
 }
 
 void k_queue_prepend(struct k_queue *queue, void *data)
@@ -134,6 +114,11 @@ void *k_queue_get(struct k_queue *queue, s32_t timeout)
 int k_queue_is_empty(struct k_queue *queue)
 {
      return uxQueueMessagesWaiting(queue->hdl)? 0:1;
+}
+
+int k_queue_get_cnt(struct k_queue *queue)
+{
+     return uxQueueMessagesWaiting(queue->hdl);
 }
 
 int k_sem_init(struct k_sem *sem, unsigned int initial_count, unsigned int limit)
@@ -184,12 +169,13 @@ int k_sem_give(struct k_sem *sem)
 
 int k_sem_delete(struct k_sem *sem)
 {
-    if (NULL == sem) {
+    if (NULL == sem || NULL == sem->sem.hdl) {
         BT_ERR("sem is NULL\n");
         return -EINVAL;
     }
 
     vSemaphoreDelete(sem->sem.hdl);
+    sem->sem.hdl = NULL;
     return 0;
 }
 
@@ -229,6 +215,19 @@ int k_thread_create(struct k_thread *new_thread, const char *name,
     xTaskCreate(entry, name, stack_size, NULL, prio, (void *)(&new_thread->task));
     
     return new_thread->task? 0 : -1;
+}
+
+void k_thread_delete(struct k_thread *new_thread)
+{
+    if(NULL == new_thread || 0 == new_thread->task)
+    {
+        BT_ERR("task is NULL\n");
+        return;
+    }
+    
+    vTaskDelete((void *)(new_thread->task));
+    new_thread->task = 0;
+    return;
 }
 
 int k_yield(void)
@@ -272,9 +271,14 @@ void k_timer_init(k_timer_t *timer, k_timer_handler_t handle, void *args)
     BT_ASSERT(timer != NULL);
     timer->handler = handle;
     timer->args = args;
-
-    timer->timer.hdl = xTimerCreate("Timer", pdMS_TO_TICKS(1000), 0, 0, (TimerCallbackFunction_t)(timer->handler)); 
+	/* Set args as timer id */
+    timer->timer.hdl = xTimerCreate("Timer", pdMS_TO_TICKS(1000), 0, args, (TimerCallbackFunction_t)(timer->handler)); 
     BT_ASSERT(timer->timer.hdl != NULL);
+}
+
+void* k_timer_get_id(void* hdl)
+{
+	return pvTimerGetTimerID((TimerHandle_t)hdl);
 }
 
 void k_timer_start(k_timer_t *timer, uint32_t timeout)
@@ -286,11 +290,20 @@ void k_timer_start(k_timer_t *timer, uint32_t timeout)
     timer->timeout = timeout;
     timer->start_ms = k_now_ms();
 
-    ret = xTimerStop(timer->timer.hdl, 0);
-    BT_ASSERT(ret == pdPASS);
     ret = xTimerChangePeriod(timer->timer.hdl, pdMS_TO_TICKS(timeout), 0);
     BT_ASSERT(ret == pdPASS);
     ret = xTimerStart(timer->timer.hdl, 0);
+    BT_ASSERT(ret == pdPASS);
+}
+
+void k_timer_reset(k_timer_t *timer)
+{
+    BaseType_t ret;
+
+    (void) ret;
+    BT_ASSERT(timer != NULL);
+  
+    ret = xTimerReset(timer->timer.hdl, 0);
     BT_ASSERT(ret == pdPASS);
 }
 
@@ -319,4 +332,23 @@ void k_timer_delete(k_timer_t *timer)
 long long k_now_ms(void)
 {
     return (long long)(xTaskGetTickCount() * 1000)/configTICK_RATE_HZ;   
+}
+
+void k_get_random_byte_array(uint8_t *buf, size_t len)
+{
+    // bl_rand() return a word, but *buf may not be word-aligned
+    for(int i = 0; i < len; i++)
+    {
+        *(buf + i) = (uint8_t)(bl_rand() & 0xFF);
+    }
+}
+
+void *k_malloc(size_t size)
+{
+    return pvPortMalloc(size);
+}
+
+void k_free(void *buf)
+{
+    return vPortFree(buf);
 }

@@ -339,7 +339,7 @@ sntp_process(const struct sntp_timestamps *timestamps)
   taskEXIT_CRITICAL();
 
   LWIP_UNUSED_ARG(frac); /* might be unused if only seconds are set */
-  printf("sntp_process: %ld, %l" U32_F " us\r\n", sec + DIFF_SEC_1970_2036, SNTP_FRAC_TO_US(frac));
+  printf("sntp_process: %ld, %" U32_F " us\r\n", sec + DIFF_SEC_1970_2036, SNTP_FRAC_TO_US(frac));
 }
 
 /**

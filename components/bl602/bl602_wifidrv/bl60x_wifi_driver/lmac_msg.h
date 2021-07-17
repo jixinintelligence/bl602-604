@@ -73,15 +73,20 @@ enum
     TASK_BAM,
     /// MESH task
     TASK_MESH,
+    /// HOSTAPD task
+    TASK_HOSTAPD_U,
     /// RXU task
     TASK_RXU,
+    /// CFG task
+    TASK_CFG,
 #if 0
     // This is used to define the last task that is running on the EMB processor
     TASK_LAST_EMB = TASK_TDLS,
 #else
     // This is used to define the last task that is running on the EMB processor
-    TASK_LAST_EMB = TASK_RXU,
+    TASK_LAST_EMB = TASK_CFG,
 #endif
+
     // nX API task
     TASK_API,
     TASK_MAX,
@@ -285,7 +290,7 @@ enum mm_msg_tag
     MM_SET_POWER_CFM,
     /// Request to the LMAC to trigger the embedded logic analyzer and forward the debug
     /// dump.
-    MM_DBG_TRIGGER_REQ,
+    MM_DENOISE_REQ,
     /// Set Power Save mode
     MM_SET_PS_MODE_REQ,
     /// Set Power Save mode confirmation
@@ -590,6 +595,12 @@ struct mm_set_beacon_int_req
     u16_l beacon_int;
     /// Index of the interface for which the parameter is configured
     u8_l inst_nbr;
+};
+
+/// Structure containing the parameters of the @ref MM_SET_BEACON_INT_CFM message
+struct mm_set_beacon_int_cfm
+{
+    u8_l status;
 };
 
 /// Structure containing the parameters of the @ref MM_SET_BASIC_RATES_REQ message
@@ -992,6 +1003,11 @@ struct mm_set_ps_mode_req
     u8_l  new_state;
 };
 
+struct mm_set_denoise_req
+{
+    u8_l  denoise_mode;
+};
+
 /// Structure containing the parameters of the @ref MM_BCN_CHANGE_REQ message.
 #define BCN_MAX_CSA_CPT 2
 struct mm_bcn_change_req
@@ -1307,7 +1323,7 @@ enum scan_msg_tag
 };
 
 /// Maximum number of SSIDs in a scan request
-#define SCAN_SSID_MAX   2
+#define SCAN_SSID_MAX  1
 
 /// Maximum number of 2.4GHz channels
 #define SCAN_CHANNEL_2G4 14
@@ -1450,6 +1466,22 @@ struct scanu_start_cfm
     u8_l status;
 };
 
+typedef struct
+{
+    uint8_t  wep;
+    uint8_t  wpa;
+    uint8_t  wpa2;
+} Security_mode_t;
+
+typedef struct
+{
+    uint8_t   wep40      : 1;
+    uint8_t   wep104     : 1;
+    uint8_t   tkip       : 1;
+    uint8_t   ccmp       : 1;
+    uint8_t   rsvd       : 4;
+} Cipher_t;
+
 /// Parameters of the @SCANU_RESULT_IND message
 struct scanu_result_ind
 {
@@ -1565,12 +1597,8 @@ struct me_chan_config_req
 {
     /// List of 2.4GHz supported channels
     struct scan_chan_tag chan2G4[SCAN_CHANNEL_2G4];
-    /// List of 5GHz supported channels
-    struct scan_chan_tag chan5G[SCAN_CHANNEL_5G];
     /// Number of 2.4GHz channels in the list
     u8_l chan2G4_cnt;
-    /// Number of 5GHz channels in the list
-    u8_l chan5G_cnt;
 };
 
 /// Structure containing the parameters of the @ref ME_SET_CONTROL_PORT_REQ message
@@ -1792,6 +1820,8 @@ struct sm_connect_req
     u8_l uapsd_queues;
     /// VIF index
     u8_l vif_idx;
+    /// retry counter for auth/aossoc
+    u8_l counter_retry_auth_assoc;
     /// Buffer containing the additional information elements to be put in the
     /// association request
     u32_l ie_buf[64];
@@ -1904,14 +1934,86 @@ enum apm_msg_tag
     APM_STA_ADD_IND,
     /// Nofity host that a station has left the network
     APM_STA_DEL_IND,
+    /// Check sta connect timeout
+    APM_STA_CONNECT_TIMEOUT_IND,
+
     /// Request to delete STA
     APM_STA_DEL_REQ,
     /// Confirmation of delete STA
     APM_STA_DEL_CFM,
 
+    /// CONF MAX STA Request
+    APM_CONF_MAX_STA_REQ,
+    /// CONF MAX STA Confirm
+    APM_CONF_MAX_STA_CFM,
+
     /// MAX number of messages
     APM_MAX,
 };
+
+enum cfg_msg_tag
+{
+    /// Request to start the AP.
+    CFG_START_REQ = LMAC_FIRST_MSG(TASK_CFG),
+    CFG_START_CFM,
+    CFG_MAX,
+};
+
+struct
+{
+    /// TASK 
+    uint32_t task;
+    /// ELEMENT
+    uint32_t element;
+    /// length
+    uint32_t length;
+    /// buffer
+    uint32_t buf[];
+} cfg_start_req_u_tlv_t;
+
+struct cfg_start_req
+{
+    /// TYPE: GET/SET/RESET/DUMP
+    uint32_t ops;
+    union {
+        /// struct for get ELEMENT
+        struct {
+            /// TASK 
+            uint32_t task;
+            /// ELEMENT
+            uint32_t element;
+        } get[0];
+
+        /// struct for reset ELEMENT
+        struct {
+            /// TASK 
+            uint32_t task;
+            /// ELEMENT
+            uint32_t element;
+        } reset[0];
+
+        /// struct for set ELEMENT with TLV based
+        struct {
+            /// TASK 
+            uint32_t task;
+            /// ELEMENT
+            uint32_t element;
+            /// type
+            uint32_t type;
+            /// length
+            uint32_t length;
+            /// buffer
+            uint32_t buf[];
+        } set[0];
+    } u;
+};
+
+struct cfg_start_cfm
+{
+    /// Status of the AP starting procedure
+    uint8_t status;
+};
+
 
 /// Structure containing the parameters of the @ref APM_START_REQ message.
 struct apm_start_req
@@ -1926,6 +2028,8 @@ struct apm_start_req
     u32_l center_freq2;
     /// Width of channel
     u8_l ch_width;
+    /// Hidden ssid
+    u8_l hidden_ssid;
     /// Address, in host memory, to the beacon template
     u32_l bcn_addr;
     /// Length of the beacon template
@@ -1956,6 +2060,7 @@ struct apm_start_req
     uint8_t ap_sec_type;
     /// AP Passphrase
     uint8_t phrase[MAX_PSK_PASS_PHRASE_LEN];
+    uint8_t phrase_tail[1];
 };
 
 /// Structure containing the parameters of the @ref APM_START_CFM message.
@@ -1976,6 +2081,13 @@ struct apm_stop_req
 {
     /// Index of the VIF for which the AP has to be stopped
     u8_l vif_idx;
+};
+
+/// Structure containing the parameters of the @ref APM_CONF_MAX_STA_REQ message.
+struct apm_conf_max_sta_req
+{
+    /// max Stattion supported
+    u8_l max_sta_supported;
 };
 
 struct apm_sta_del_req

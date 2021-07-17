@@ -95,6 +95,7 @@ static intCallback_Type * pdsIntCbfArra[4][1]={{NULL},{NULL},{NULL},{NULL}};
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION PDS_Reset(void)
 {
@@ -110,6 +111,7 @@ BL_Err_Type ATTR_TCM_SECTION PDS_Reset(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Enable power down sleep
@@ -121,18 +123,20 @@ BL_Err_Type ATTR_TCM_SECTION PDS_Reset(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION PDS_Enable(PDS_CTL_Type *cfg,PDS_CTL4_Type *cfg4,uint32_t pdsSleepCnt)
 {
+    
     /* PDS sleep time 0 <=> sleep forever */
-    /* PDS sleep time 1~PDS_WARMUP_CNT <=> error */
-    /* PDS sleep time >PDS_WARMUP_CNT <=> correct */
+    /* PDS sleep time 1~PDS_WARMUP_LATENCY_CNT <=> error */
+    /* PDS sleep time >PDS_WARMUP_LATENCY_CNT <=> correct */
     if(!pdsSleepCnt){
         cfg->sleepForever = 1;
-    }else if((pdsSleepCnt)&&(pdsSleepCnt<=PDS_WARMUP_CNT)){
+    }else if((pdsSleepCnt)&&(pdsSleepCnt<=PDS_WARMUP_LATENCY_CNT)){
         return ERROR;
     }else{
-        BL_WR_REG(PDS_BASE,PDS_TIME1,pdsSleepCnt-PDS_WARMUP_CNT);
+        BL_WR_REG(PDS_BASE,PDS_TIME1,pdsSleepCnt-PDS_WARMUP_LATENCY_CNT);
     }
     
     /* PDS_CTL4 config */
@@ -148,6 +152,7 @@ BL_Err_Type ATTR_TCM_SECTION PDS_Enable(PDS_CTL_Type *cfg,PDS_CTL4_Type *cfg4,ui
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  power down sleep force configure
@@ -158,6 +163,7 @@ BL_Err_Type ATTR_TCM_SECTION PDS_Enable(PDS_CTL_Type *cfg,PDS_CTL4_Type *cfg4,ui
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION PDS_Force_Config(PDS_CTL2_Type *cfg2,PDS_CTL3_Type *cfg3)
 {
@@ -169,6 +175,7 @@ BL_Err_Type ATTR_TCM_SECTION PDS_Force_Config(PDS_CTL2_Type *cfg2,PDS_CTL3_Type 
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  power down sleep ram configure
@@ -178,13 +185,14 @@ BL_Err_Type ATTR_TCM_SECTION PDS_Force_Config(PDS_CTL2_Type *cfg2,PDS_CTL3_Type 
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION PDS_RAM_Config(PDS_RAM_CFG_Type *ramCfg)
 {
     uint32_t tmpVal = 0;
     
     if(NULL==ramCfg){
-    	return SUCCESS;
+        return SUCCESS;
     }
     tmpVal = BL_RD_REG(GLB_BASE,GLB_MBIST_CTL);
     /* enter bist mode (make ram idle/slp) */
@@ -206,6 +214,7 @@ BL_Err_Type ATTR_TCM_SECTION PDS_RAM_Config(PDS_RAM_CFG_Type *ramCfg)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  power down sleep force configure
@@ -217,6 +226,7 @@ BL_Err_Type ATTR_TCM_SECTION PDS_RAM_Config(PDS_RAM_CFG_Type *ramCfg)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION PDS_Default_Level_Config(PDS_DEFAULT_LV_CFG_Type *defaultLvCfg,PDS_RAM_CFG_Type *ramCfg,uint32_t pdsSleepCnt)
 {
@@ -227,6 +237,7 @@ BL_Err_Type ATTR_TCM_SECTION PDS_Default_Level_Config(PDS_DEFAULT_LV_CFG_Type *d
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  power down sleep int mask
@@ -332,6 +343,23 @@ PDS_STS_Type PDS_Get_PdsStstus(void)
 }
 
 /****************************************************************************//**
+ * @brief  PDS wakeup IRQHandler install
+ *
+ * @param  None
+ *
+ * @return SUCCESS or ERROR
+ *
+*******************************************************************************/
+BL_Err_Type PDS_WAKEUP_IRQHandler_Install(void)
+{
+#ifndef BFLB_USE_HAL_DRIVER
+    //Interrupt_Handler_Register(PDS_WAKEUP_IRQn,PDS_WAKEUP_IRQHandler);
+#endif
+    
+    return SUCCESS;
+}
+
+/****************************************************************************//**
  * @brief  Install PDS interrupt callback function
  *
  * @param  intType: PDS int type
@@ -355,6 +383,7 @@ BL_Err_Type PDS_Int_Callback_Install(PDS_INT_Type intType,intCallback_Type* cbFu
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION PDS_Trim_RC32M(void)
 {
@@ -375,6 +404,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Trim_RC32M(void)
     
     return ERROR;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Select RC32M as PLL ref source
@@ -384,6 +414,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Trim_RC32M(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION PDS_Select_RC32M_As_PLL_Ref(void)
 {
@@ -396,6 +427,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Select_RC32M_As_PLL_Ref(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Select XTAL as PLL ref source
@@ -405,6 +437,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Select_RC32M_As_PLL_Ref(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION PDS_Select_XTAL_As_PLL_Ref(void)
 {
@@ -417,6 +450,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Select_XTAL_As_PLL_Ref(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Power on PLL
@@ -426,6 +460,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Select_XTAL_As_PLL_Ref(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION PDS_Power_On_PLL(PDS_PLL_XTAL_Type xtalType)
 {
@@ -586,6 +621,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Power_On_PLL(PDS_PLL_XTAL_Type xtalType)
     
     return SUCCESS;
 }
+#endif
 /** PLL output config **/
 /*
 [8]    1'h0    r/w    clkpll_en_32m
@@ -607,6 +643,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Power_On_PLL(PDS_PLL_XTAL_Type xtalType)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION PDS_Enable_PLL_All_Clks(void)
 {
@@ -618,6 +655,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Enable_PLL_All_Clks(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Disable all PLL clock
@@ -627,6 +665,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Enable_PLL_All_Clks(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION PDS_Disable_PLL_All_Clks(void)
 {
@@ -638,6 +677,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Disable_PLL_All_Clks(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Enable PLL clock
@@ -647,6 +687,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Disable_PLL_All_Clks(void)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION PDS_Enable_PLL_Clk(PDS_PLL_CLK_Type pllClk)
 {
@@ -661,6 +702,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Enable_PLL_Clk(PDS_PLL_CLK_Type pllClk)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Disable PLL clock
@@ -670,6 +712,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Enable_PLL_Clk(PDS_PLL_CLK_Type pllClk)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION PDS_Disable_PLL_Clk(PDS_PLL_CLK_Type pllClk)
 {
@@ -684,6 +727,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Disable_PLL_Clk(PDS_PLL_CLK_Type pllClk)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Power off PLL
@@ -693,6 +737,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Disable_PLL_Clk(PDS_PLL_CLK_Type pllClk)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION PDS_Power_Off_PLL(void)
 {
@@ -718,6 +763,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Power_Off_PLL(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Power down sleep wake up interrupt handler
@@ -728,7 +774,7 @@ BL_Err_Type ATTR_CLOCK_SECTION PDS_Power_Off_PLL(void)
  *
 *******************************************************************************/
 #ifndef BL602_USE_HAL_DRIVER
-void __IRQ PDS_WAKEUP_IRQHandler(void)
+void PDS_WAKEUP_IRQHandler(void)
 {
     for(PDS_INT_Type intType=PDS_INT_WAKEUP;intType<PDS_INT_MAX;intType++){
         if(PDS_Get_IntStatus(intType)&&(pdsIntCbfArra[intType][0]!=NULL)){

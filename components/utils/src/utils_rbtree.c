@@ -227,7 +227,19 @@ void * rb_tree_find(struct rb_tree *self, void *value)
 // Creates (malloc'ates) 
 int rb_tree_insert(struct rb_tree *self, void *value) 
 {
-    return rb_tree_insert_node(self, rb_node_create(value));
+    struct rb_node *node;
+
+    if (NULL == self) {
+        return 0;
+    }
+
+    node = rb_node_create(value);
+
+    if (NULL == node) {
+        return 0;
+    }
+
+    return rb_tree_insert_node(self, node);
 }
 
 // Returns 1 on success, 0 otherwise.
@@ -297,6 +309,8 @@ int rb_tree_insert_node (struct rb_tree *self, struct rb_node *node)
         // Make the root black for simplified logic
         self->root->red = 0;
         ++self->size;
+    } else {
+        return 0;
     }
     
     return 1;

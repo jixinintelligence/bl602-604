@@ -183,7 +183,7 @@ typedef enum {
  *  @brief ADC voltage reference type definition
  */
 typedef enum {
-    ADC_VREF_3P3V,                          /*!< ADC select 3.3V as reference voltage */
+    ADC_VREF_3P2V,                          /*!< ADC select 3.2V as reference voltage */
     ADC_VREF_2V,                            /*!< ADC select 2V as reference voltage */
 }ADC_VREF_Type;
 
@@ -305,6 +305,15 @@ typedef struct {
     BL_Fun_Type dmaEn;                      /*!< ADC DMA enable */
 }ADC_FIFO_Cfg_Type;
 
+/**
+ *  @brief ADC REG GAIN CAL
+ */
+typedef struct {
+    BL_Fun_Type adcGainCoeffEnable;         /*!< ADC_Gain_Coeff enable */
+    uint16_t adcgainCoeffVal;                /*!< ADC_Gain_Coeff value */
+    float coe;                              /*!< ADC_Gain_Coeff result */
+}ADC_Gain_Coeff_Type;
+
 /*@} end of group ADC_Public_Types */
 
 /** @defgroup  ADC_Public_Constants
@@ -421,7 +430,7 @@ typedef struct {
 /** @defgroup  ADC_VREF_TYPE
  *  @{
  */
-#define IS_ADC_VREF_TYPE(type)                           (((type) == ADC_VREF_3P3V) || \
+#define IS_ADC_VREF_TYPE(type)                           (((type) == ADC_VREF_3P2V) || \
                                                           ((type) == ADC_VREF_2V))
 
 /** @defgroup  ADC_SIG_INPUT_TYPE
@@ -515,6 +524,10 @@ void ADC_Tsen_Init(ADC_TSEN_MOD_Type tsenMod);
 BL_Err_Type ADC_Mic_Init(ADC_MIC_Type * adc_mic_config);
 void ADC_MIC_Bias_Disable(void);
 void ADC_MIC_Bias_Enable(void);
+BL_Err_Type ADC_Trim_TSEN(uint16_t * tsen_offset);
+BL_Err_Type ADC_Gain_Trim(void);
+uint32_t ADC_Cal_Reg_Coeff_Value(uint32_t raw_reg);
+float TSEN_Get_Temp(uint32_t tsen_offset);
 
 /*@} end of group ADC_Public_Functions */
 

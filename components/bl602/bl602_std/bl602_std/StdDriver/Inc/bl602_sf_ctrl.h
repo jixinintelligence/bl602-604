@@ -312,6 +312,9 @@ void SF_Ctrl_SendCmd(SF_Ctrl_Cmd_Cfg_Type *cfg);
 void SF_Ctrl_Icache_Set(SF_Ctrl_Cmd_Cfg_Type *cfg,uint8_t cmdValid);
 void SF_Ctrl_Icache2_Set(SF_Ctrl_Cmd_Cfg_Type *cfg,uint8_t cmdValid);
 BL_Sts_Type SF_Ctrl_GetBusyState(void);
+uint8_t SF_Ctrl_Is_AES_Enable(void);
+uint8_t SF_Ctrl_Get_Clock_Delay(void);
+void SF_Ctrl_Set_Clock_Delay(uint8_t delay);
 
 /*@} end of group SF_CTRL_Public_Functions */
 

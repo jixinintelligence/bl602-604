@@ -34,6 +34,8 @@
 #include "bl_pwm.h"
 #include "bl_irq.h"
 
+#include <blog.h>
+
 static void gpio_init(uint8_t pin)
 {
 	GLB_GPIO_Cfg_Type cfg;
@@ -52,7 +54,7 @@ static int32_t pwm_init(uint8_t id, uint32_t freq)
 {
     PWM_CH_CFG_Type pwmCfg = {
         .ch = PWM_CH0,
-        .clk = PWM_CLK_BCLK,        //PWM_CLK_BCLK PWM_CLK_XCLK
+        .clk = PWM_CLK_XCLK,        //PWM_CLK_BCLK PWM_CLK_XCLK
         .stopMode = PWM_STOP_ABRUPT,//PWM_STOP_ABRUPT:default PWM_STOP_GRACEFUL:no change 
         .pol = PWM_POL_NORMAL,      //first low
         .clkDiv = 0,                //40/2 = 20M
@@ -67,7 +69,8 @@ static int32_t pwm_init(uint8_t id, uint32_t freq)
         return -1;
     }
 
-    pwmCfg.period = 80000000/freq;
+    pwmCfg.period = BL_PWM_CLK/freq;
+    pwmCfg.ch = id;
 
     PWM_Channel_Disable(id);
     PWM_Channel_Init(&pwmCfg);
@@ -83,7 +86,7 @@ int32_t bl_pwm_init(uint8_t id, uint8_t pin, uint32_t freq)
 
     /* 2k ~ 800K */
     if ((freq < 2000) || (freq > 800000)) {
-        printf("arg error. bl_pwm_init freq = %ld\r\n", freq);
+        blog_error("arg error. bl_pwm_init freq = %ld\r\n", freq);
         return -1;
     }
 
@@ -108,14 +111,14 @@ int32_t bl_pwm_stop(uint8_t id)
 
 int32_t bl_pwm_set_freq(uint8_t id, uint32_t freq)
 {
-    printf("not support.\r\n");
     PWM_Channel_Disable(id);
 
-    uint16_t period = 80000000/freq;
+    uint16_t period = BL_PWM_CLK/freq;
     uint16_t threshold1 = 0;
     uint16_t threshold2 = 0;
 
     PWM_Channel_Update(id, period, threshold1, threshold2);
+    PWM_Channel_Enable(id);
 
     return 0;
 }
@@ -135,4 +138,21 @@ int32_t bl_pwm_set_duty(uint8_t id, float duty)
     PWM_Channel_Set_Threshold2(id, threshold2);
     return 0;
 }
+
+int32_t bl_pwm_get_duty(uint8_t id, float *p_duty)
+{
+    uint16_t period;
+    uint16_t threshold1;
+    uint16_t threshold2;
+
+    if (NULL == p_duty) {
+        return -1;
+    }
+    PWM_Channel_Get(id, &period, &threshold1, &threshold2);
+
+    *p_duty = (float)threshold2 * 100 / period;
+
+    return 0;
+}
+
 

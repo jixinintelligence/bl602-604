@@ -30,6 +30,8 @@
 #include <string.h>
 #include <bl60x_fw_api.h>
 #include <lwip/tcpip.h>
+#include <lwip/netifapi.h>
+#include <lwip/dns.h>
 #include <ethernetif.h>
 #include <bl_efuse.h>
 #include <bl_wifi.h>
@@ -46,7 +48,7 @@
 /*just limit packet len with a reasonable value*/
 #define LEN_PKT_RAW_80211   (480)
 
-#define WIFI_SCAN_MAX_AP      (32)
+#define WIFI_SCAN_MAX_AP      (WIFI_MGMR_SCAN_ITEMS_MAX)
 
 SemaphoreHandle_t scan_sig;
 
@@ -87,6 +89,7 @@ static void cb_scan_item_parse(wifi_mgmr_ap_item_t *env, uint32_t *param1, wifi_
     memcpy(ap_ary_ptr->ssid, item->ssid, sizeof(ap_ary_ptr->ssid));//XXX boundary attack, copy too much data from wifi manager internal?
     ap_ary_ptr->ssid_tail[0] = '\0';
     ap_ary_ptr->ssid_len = strlen((char *)ap_ary_ptr->ssid);
+    ap_ary_ptr->auth = item->auth;
 
     /*store back counter*/
     (*param1) = counter;
@@ -160,12 +163,12 @@ static void wifi_eth_sta_enable(struct netif *netif, uint8_t mac[6])
     * The init function pointer must point to a initialization function for
     * your ethernet netif interface. The following code illustrates it's use.*/
 
-    netif_add(netif, &ipaddr, &netmask, &gw, NULL, &bl606a0_wifi_netif_init, &tcpip_input);
+    netifapi_netif_add(netif, &ipaddr, &netmask, &gw, NULL, &bl606a0_wifi_netif_init, &tcpip_input);
     netif->name[0] = 's';
     netif->name[1] = 't';
-    netif->flags |= NETIF_FLAG_LINK_UP;
-    netif_set_default(netif);
-    netif_set_up(netif);
+    netif->flags |=  NETIF_FLAG_LINK_UP | NETIF_FLAG_IGMP;
+    netifapi_netif_set_default(netif);
+    netifapi_netif_set_up(netif);
 }
 
 int wifi_mgmr_psk_cal(char *password, char *ssid, int ssid_len, char *output)
@@ -219,6 +222,11 @@ int wifi_mgmr_sta_disable(wifi_interface_t *interface)
     return 0;
 }
 
+struct netif *wifi_mgmr_sta_netif_get(void)
+{
+    return &wifiMgmr.wlan_sta.netif;
+}
+
 int wifi_mgmr_sta_mac_set(uint8_t mac[6])
 {
     memcpy(wifiMgmr.wlan_sta.mac, mac, 6);
@@ -253,6 +261,47 @@ int wifi_mgmr_sta_ip_get(uint32_t *ip, uint32_t *gw, uint32_t *mask)
     *gw = netif_ip4_gw(&wifiMgmr.wlan_sta.netif)->addr;
 
     return 0;
+}
+
+int wifi_mgmr_sta_dns_get(uint32_t *dns1, uint32_t *dns2)
+{
+    const ip_addr_t* dns;
+
+    /*Get DNS1*/
+    dns = dns_getserver(0);
+    *dns1 = ip_addr_get_ip4_u32(dns);
+
+    /*Get DNS2*/
+    if (DNS_MAX_SERVERS > 1) {
+        dns = dns_getserver(1);
+        *dns2 = ip_addr_get_ip4_u32(dns);
+    } else {
+        *dns2 = 0;
+    }
+
+    return 0;
+}
+
+int wifi_mgmr_sta_ip_set(uint32_t ip, uint32_t mask, uint32_t gw, uint32_t dns1, uint32_t dns2)
+{
+    taskENTER_CRITICAL();
+
+    wifiMgmr.wlan_sta.ipv4.ip = ip;
+    wifiMgmr.wlan_sta.ipv4.mask = mask;
+    wifiMgmr.wlan_sta.ipv4.gw = gw;
+    wifiMgmr.wlan_sta.ipv4.dns1 = dns1;
+    wifiMgmr.wlan_sta.ipv4.dns2 = dns2;
+
+    taskEXIT_CRITICAL();
+
+    wifi_mgmr_api_ip_update();
+
+    return 0;
+}
+
+int wifi_mgmr_sta_ip_unset(void)
+{
+    return wifi_mgmr_sta_ip_set(0, 0, 0, 0, 0);
 }
 
 int wifi_mgmr_sta_connect(wifi_interface_t *wifi_interface, char *ssid, char *psk, char *pmk, uint8_t *mac, uint8_t band, uint16_t freq)
@@ -347,14 +396,24 @@ void wifi_mgmr_sta_connect_ind_stat_get(wifi_mgmr_sta_connect_ind_stat_info_t *w
 
 void wifi_mgmr_sta_ssid_set(char *ssid)
 {
-    if (strlen(ssid) > 0)
-        memcpy(wifiMgmr.wifi_mgmr_stat_info.ssid, ssid, strlen(ssid));
+  int len = strlen(ssid);
+
+  if (len > 0) {
+    len = len > (sizeof(wifiMgmr.wifi_mgmr_stat_info.ssid) - 1) ? sizeof(wifiMgmr.wifi_mgmr_stat_info.ssid) - 1 : len;
+    memcpy(wifiMgmr.wifi_mgmr_stat_info.ssid, ssid, len);
+    wifiMgmr.wifi_mgmr_stat_info.ssid[len] = 0;
+  }
 }
 
 void wifi_mgmr_sta_psk_set(char *psk)
 {
-    if (strlen(psk) > 0)
-        memcpy(wifiMgmr.wifi_mgmr_stat_info.psk, psk, strlen(psk));
+  int len = strlen(psk);
+
+  if (len > 0) {
+    len = len > (sizeof(wifiMgmr.wifi_mgmr_stat_info.psk) - 1) ? sizeof(wifiMgmr.wifi_mgmr_stat_info.psk) - 1 : len;
+    memcpy(wifiMgmr.wifi_mgmr_stat_info.psk, psk, len);
+    wifiMgmr.wifi_mgmr_stat_info.psk[len] = 0;
+  }
 }
 
 static void wifi_eth_ap_enable(struct netif *netif, uint8_t mac[6])
@@ -391,17 +450,23 @@ static void wifi_eth_ap_enable(struct netif *netif, uint8_t mac[6])
         memcpy(mac, netif->hwaddr, 6);//overwrite mac address in netif
     }
 
-    netif_add(netif, &ipaddr, &netmask, &gw, NULL, &bl606a0_wifi_netif_init, &tcpip_input);
+    netifapi_netif_add(netif, &ipaddr, &netmask, &gw, NULL, &bl606a0_wifi_netif_init, &tcpip_input);
     netif->name[0] = 'a';
     netif->name[1] = 'p';
-    netif_set_default(netif);
-    netif_set_up(netif);
+    netifapi_netif_set_default(netif);
+    netifapi_netif_set_up(netif);
 }
 
 wifi_interface_t wifi_mgmr_ap_enable()
 {
-    wifiMgmr.wlan_ap.mode = 1;//ap mode
-    wifi_eth_ap_enable(&(wifiMgmr.wlan_ap.netif), wifiMgmr.wlan_ap.mac);
+    //printf("wifiMgmr.wlan_ap.mode = %d \r\n", wifiMgmr.wlan_ap.mode);
+    //TODO should add lock to avoid being called at the same time
+    if (wifiMgmr.inf_ap_enabled) {
+        /*nothing here*/
+    } else {
+        wifiMgmr.wlan_ap.mode = 1;//ap mode
+        wifi_eth_ap_enable(&(wifiMgmr.wlan_ap.netif), wifiMgmr.wlan_ap.mac);
+    }
     return &(wifiMgmr.wlan_ap);
 }
 
@@ -434,16 +499,16 @@ int wifi_mgmr_ap_mac_get(uint8_t mac[6])
 int wifi_mgmr_ap_ip_get(uint32_t *ip, uint32_t *gw, uint32_t *mask)
 {
     *ip = netif_ip4_addr(&wifiMgmr.wlan_ap.netif)->addr;
-    *gw = netif_ip4_netmask(&wifiMgmr.wlan_ap.netif)->addr;
-    *mask = netif_ip4_gw(&wifiMgmr.wlan_ap.netif)->addr;
+    *mask = netif_ip4_netmask(&wifiMgmr.wlan_ap.netif)->addr;
+    *gw = netif_ip4_gw(&wifiMgmr.wlan_ap.netif)->addr;
 
     return 0;
 }
 
 //TODO this API is still NOT completed, more features need to be implemented
-int wifi_mgmr_ap_start(wifi_interface_t *interface, char *ssid, int md, char *passwd, int channel)
+int wifi_mgmr_ap_start(wifi_interface_t *interface, char *ssid, int hidden_ssid, char *passwd, int channel)
 {
-    wifi_mgmr_api_ap_start(ssid, passwd, channel);
+    wifi_mgmr_api_ap_start(ssid, passwd, channel, hidden_ssid);
     return 0;
 }
 
@@ -513,6 +578,11 @@ int wifi_mgmr_sniffer_disable()
 int wifi_mgmr_rate_config(uint16_t config)
 {
     return wifi_mgmr_api_rate_config(config);
+}
+
+int wifi_mgmr_conf_max_sta(uint8_t max_sta_supported)
+{
+    return wifi_mgmr_api_conf_max_sta(max_sta_supported);
 }
 
 int wifi_mgmr_state_get(int *state)
@@ -599,8 +669,44 @@ int wifi_mgmr_scan(void *data, scan_complete_cb_t cb)
     scan_cb = cb;
     scan_data = data;
 
-    wifi_mgmr_api_fw_scan();
+    wifi_mgmr_api_fw_scan(NULL, 0);
 
+    return 0;
+}
+
+int wifi_mgmr_scan_fixed_channels(void *data, scan_complete_cb_t cb, uint16_t *channels, uint16_t channel_num)
+{
+    scan_cb = cb;
+    scan_data = data;
+
+    if (0 != channel_num && NULL == channels) {
+        return -1;
+    }
+
+    wifi_mgmr_api_fw_scan(channels, channel_num);
+    return 0;
+}
+
+int wifi_mgmr_cfg_req(uint32_t ops, uint32_t task, uint32_t element, uint32_t type, uint32_t length, uint32_t *buf)
+{
+    return wifi_mgmr_api_cfg_req(ops, task, element, type, length, buf);
+}
+
+int wifi_mgmr_beacon_interval_set(uint16_t beacon_int)
+{
+    wifiMgmr.ap_bcn_int = beacon_int;
+    return 0;
+}
+
+int wifi_mgmr_scan_filter_hidden_ssid(int filter)
+{
+    taskENTER_CRITICAL();
+    if (filter) {
+        wifiMgmr.features &= (~WIFI_MGMR_FEATURES_SCAN_SAVE_HIDDEN_SSID);
+    } else {
+        wifiMgmr.features |= WIFI_MGMR_FEATURES_SCAN_SAVE_HIDDEN_SSID;
+    }
+    taskEXIT_CRITICAL();
     return 0;
 }
 
@@ -623,7 +729,8 @@ int wifi_mgmr_scan_ap(char *ssid, wifi_mgmr_ap_item_t *item)
     wifi_mgmr_scan_item_t *scan;
 
     for (i = 0; i < sizeof(wifiMgmr.scan_items)/sizeof(wifiMgmr.scan_items[0]); i++) {
-        if (wifiMgmr.scan_items[i].is_used && 0 == strcmp(wifiMgmr.scan_items[i].ssid, ssid)) {
+        if (wifiMgmr.scan_items[i].is_used && 
+                (!wifi_mgmr_scan_item_is_timeout(&wifiMgmr, &(wifiMgmr.scan_items[i]))) && 0 == strcmp(wifiMgmr.scan_items[i].ssid, ssid)) {
             /*found the ssid*/
             index = i;
             if (wifiMgmr.scan_items[i].rssi > rssi) {
@@ -658,7 +765,7 @@ int wifi_mgmr_scan_ap_all(wifi_mgmr_ap_item_t *env, uint32_t *param1, scan_item_
 
     for (i = 0; i < sizeof(wifiMgmr.scan_items)/sizeof(wifiMgmr.scan_items[0]); i++) {
         scan = &wifiMgmr.scan_items[i];
-        if (scan->is_used) {
+        if (scan->is_used && (!wifi_mgmr_scan_item_is_timeout(&wifiMgmr, &(wifiMgmr.scan_items[i])))) {
             /*convert internal scan results to ext_scan_result*/
             memcpy(item.ssid, scan->ssid, sizeof(item.ssid));
             item.ssid_tail[0] = '\0';

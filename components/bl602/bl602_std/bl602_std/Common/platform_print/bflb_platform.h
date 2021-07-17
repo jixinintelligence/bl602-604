@@ -5,6 +5,9 @@
 #include "stdio.h"
 #include "stdint.h"
 #include "string.h"
+#ifdef BFLB_MCU_SDK
+#include "mcu_sdk_version.h"
+#endif
 
 void *	pvPortMalloc( size_t xWantedSize );
 void* 	pvPortRealloc(void* ptr, size_t newsize);
@@ -32,6 +35,7 @@ uint32_t  bflb_platform_get_systick_int_cnt(void);
 uint64_t  bflb_platform_get_time_ms();
 void bflb_platform_start_time(void);
 void bflb_platform_stop_time(void);
+void bflb_platform_set_alarm_time(uint64_t time);
 void bflb_platform_init_time(void);
 void bflb_platform_deinit_time(void);
 void bflb_platform_delay_ms(uint32_t time);

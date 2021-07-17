@@ -1,8 +1,3 @@
-/*
- * Copyright (C) 2008-2015, Marvell International Ltd.
- * All Rights Reserved.
- */
-
 #include "xz.h"
 #include <stdlib.h>
 #include <stdint.h>

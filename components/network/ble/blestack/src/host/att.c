@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 /* att.c - Attribute protocol handling */
 
 /*
@@ -84,9 +55,13 @@ struct bt_attr_data {
 	u16_t offset;
 };
 
+#if !defined(BFLB_DYNAMIC_ALLOC_MEM)
 /* Pool for incoming ATT packets */
 NET_BUF_POOL_DEFINE(prep_pool, CONFIG_BT_ATT_PREPARE_COUNT, BT_ATT_MTU,
 		    sizeof(struct bt_attr_data), NULL);
+#else
+struct net_buf_pool prep_pool;
+#endif
 #endif /* CONFIG_BT_ATT_PREPARE_COUNT */
 
 enum {
@@ -119,6 +94,16 @@ extern volatile u8_t event_flag;
 
 static struct bt_att bt_req_pool[CONFIG_BT_MAX_CONN];
 static struct bt_att_req cancel;
+
+
+#if defined(CONFIG_BLE_AT_CMD)
+static u16_t mtu_size = BT_ATT_MTU;
+void set_mtu_size(u16_t size)
+{
+	mtu_size = size;
+}
+#endif
+
 
 static void att_req_destroy(struct bt_att_req *req)
 {
@@ -155,7 +140,8 @@ static int att_send(struct bt_conn *conn, struct net_buf *buf,
 	hdr = (void *)buf->data;
 
 	BT_DBG("code 0x%02x", hdr->code);
-
+    
+    #if defined(CONFIG_BT_SMP) && defined(CONFIG_BT_SIGNING)
 	if (hdr->code == BT_ATT_OP_SIGNED_WRITE_CMD) {
 		int err;
 
@@ -166,7 +152,7 @@ static int att_send(struct bt_conn *conn, struct net_buf *buf,
 			return err;
 		}
 	}
-
+    #endif
 	return bt_l2cap_send_cb(conn, BT_L2CAP_CID_ATT, buf,
 				cb ? cb : att_cb(buf),
 				user_data);
@@ -708,7 +694,7 @@ static u8_t att_find_type_rsp(struct bt_att *att, u16_t start_handle,
 		#if defined(CONFIG_BT_STACK_PTS)
 		/*PTS sends a request to the iut discover all primary services it contains */
 		if(event_flag == att_find_by_type_value_ind){
-			BT_STACK_PTS_DBG("rsp err : [%d] start_handle = [0x%04x]\r\n",data.err,start_handle);
+			BT_PTS("rsp err : [%d] start_handle = [0x%04x]\r\n",data.err,start_handle);
 		}
 		#endif
 		return 0;
@@ -725,9 +711,13 @@ static u8_t att_find_type_rsp(struct bt_att *att, u16_t start_handle,
 		
 		(void)memcpy(src, req_val, data.value_len);
 
-		BT_STACK_PTS_SDBG(src, value_len, 1);
+        BT_PTS("uuid = [");
+        for(i=0;i<value_len;i++){
+                BT_PTS("%02x", src[value_len-1-i]);
+        }
+        BT_PTS("]\r\n");\
 	
-		BT_STACK_PTS_DBG("start_handle = [0x%04x] end_handle = [0x%04x]\r\n", data.buf->data[1] | data.buf->data[2] << 8,
+		BT_PTS("start_handle = [0x%04x] end_handle = [0x%04x]\r\n", data.buf->data[1] | data.buf->data[2] << 8,
 																			  data.buf->data[3] | data.buf->data[4] << 8);
 		
 	}
@@ -897,7 +887,7 @@ static u8_t att_read_type_rsp(struct bt_att *att, struct bt_uuid *uuid,
 
 	#if defined(CONFIG_BT_STACK_PTS)
 	if(event_flag == att_read_by_type_ind)
-		BT_STACK_PTS_DBG("handle : [0x%04x]\r\n",data.rsp->data->handle);	
+		BT_PTS("handle : [0x%04x]\r\n",data.rsp->data->handle);	
 	#endif
 
 	(void)bt_l2cap_send_cb(conn, BT_L2CAP_CID_ATT, data.buf, att_rsp_sent,
@@ -1791,13 +1781,11 @@ static u8_t att_notify(struct bt_att *att, struct net_buf *buf)
 {
 	struct bt_conn *conn = att->chan.chan.conn;
 	u16_t handle;
-
+    
 	handle = net_buf_pull_le16(buf);
-
 	BT_DBG("handle 0x%04x", handle);
 
 	bt_gatt_notification(conn, handle, buf->data, buf->len);
-
 	return 0;
 }
 
@@ -2201,9 +2189,9 @@ static void bt_att_connected(struct bt_l2cap_chan *chan)
 
 	BT_DBG("chan %p cid 0x%04x", ch, ch->tx.cid);
 
-	k_fifo_init(&att->tx_queue);
+	k_fifo_init(&att->tx_queue, 20);
 #if CONFIG_BT_ATT_PREPARE_COUNT > 0
-	k_fifo_init(&att->prep_queue);
+	k_fifo_init(&att->prep_queue, 20);
 #endif
 
 	ch->tx.mtu = BT_ATT_DEFAULT_LE_MTU;
@@ -2329,8 +2317,15 @@ void bt_att_init(void)
 		.cid		= BT_L2CAP_CID_ATT,
 		.accept		= bt_att_accept,
 	};
-
+    
 	bt_l2cap_le_fixed_chan_register(&chan);
+    #endif
+
+    #if CONFIG_BT_ATT_PREPARE_COUNT > 0
+    #if defined(BFLB_DYNAMIC_ALLOC_MEM)
+    k_lifo_init(&prep_pool.free, CONFIG_BT_ATT_PREPARE_COUNT);
+    net_buf_init(&prep_pool, CONFIG_BT_ATT_PREPARE_COUNT, BT_ATT_MTU, NULL);
+    #endif
     #endif
 
 	bt_gatt_init();

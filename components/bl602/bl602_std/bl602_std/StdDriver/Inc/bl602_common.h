@@ -122,6 +122,7 @@ typedef enum
  *  @brief Interrupt callback function type
  */
 typedef void (intCallback_Type)(void);
+typedef void( *pFunc )( void );
 
 /*@} end of group DRIVER_Public_Macro */
 
@@ -129,9 +130,7 @@ typedef void (intCallback_Type)(void);
  *  @brief DRIVER functions declaration
  *  @{
  */
-extern  intCallback_Type ** intCbfArra[];
-void Install_Int_Callback(IRQn_Type intPeriph, uint32_t intType, intCallback_Type * cbFun);
-
+void Interrupt_Handler_Register(IRQn_Type irq,pFunc interruptFun);
 void ASM_Delay_Us(uint32_t core,uint32_t cnt);
 void BL602_Delay_US(uint32_t cnt);
 void BL602_Delay_MS(uint32_t cnt);

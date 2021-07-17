@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 /* l2cap.c - L2CAP handling */
 
 /*
@@ -355,7 +326,7 @@ static bool l2cap_chan_add(struct bt_conn *conn, struct bt_l2cap_chan *chan,
 #if defined(CONFIG_BT_L2CAP_DYNAMIC_CHANNEL)
 	if (L2CAP_LE_CID_IS_DYN(ch->rx.cid)) {
 		k_work_init(&ch->rx_work, l2cap_rx_process);
-		k_fifo_init(&ch->rx_queue);
+		k_fifo_init(&ch->rx_queue, 20);
 		bt_l2cap_chan_set_state(chan, BT_L2CAP_CONNECT);
 	}
 #endif /* CONFIG_BT_L2CAP_DYNAMIC_CHANNEL */
@@ -755,7 +726,7 @@ static void l2cap_chan_rx_init(struct bt_l2cap_le_chan *chan)
 	 * be used.
 	 */
 	chan->rx.mps = MIN(chan->rx.mtu + 2, L2CAP_MAX_LE_MPS);
-	k_sem_init(&chan->rx.credits, 0, UINT_MAX);
+	k_sem_init(&chan->rx.credits, 0, BT_UINT_MAX);
 
 	if (BT_DBG_ENABLED &&
 	    chan->rx.init_credits * chan->rx.mps < chan->rx.mtu + 2) {
@@ -768,8 +739,8 @@ static void l2cap_chan_tx_init(struct bt_l2cap_le_chan *chan)
 	BT_DBG("chan %p", chan);
 
 	(void)memset(&chan->tx, 0, sizeof(chan->tx));
-	k_sem_init(&chan->tx.credits, 0, UINT_MAX);
-	k_fifo_init(&chan->tx_queue);
+	k_sem_init(&chan->tx.credits, 0, BT_UINT_MAX);
+	k_fifo_init(&chan->tx_queue, 20);
 }
 
 static void l2cap_chan_tx_give_credits(struct bt_l2cap_le_chan *chan,
@@ -897,11 +868,13 @@ static void le_conn_req(struct bt_l2cap *l2cap, u8_t ident,
 	}
 
 	/* Check if connection has minimum required security level */
+    #if defined(CONFIG_BT_SMP)
 	if (conn->sec_level < server->sec_level) {
 		rsp->result = sys_cpu_to_le16(BT_L2CAP_LE_ERR_AUTHENTICATION);
 		goto rsp;
 	}
-
+    #endif
+    
 	if (!L2CAP_LE_CID_IS_DYN(scid)) {
 		rsp->result = sys_cpu_to_le16(BT_L2CAP_LE_ERR_INVALID_SCID);
 		goto rsp;
@@ -1030,6 +1003,7 @@ static void le_disconn_req(struct bt_l2cap *l2cap, u8_t ident,
 	bt_l2cap_send(conn, BT_L2CAP_CID_LE_SIG, buf);
 }
 
+#if defined(CONFIG_BT_SMP)
 static int l2cap_change_security(struct bt_l2cap_le_chan *chan, u16_t err)
 {
 	switch (err) {
@@ -1057,6 +1031,7 @@ static int l2cap_change_security(struct bt_l2cap_le_chan *chan, u16_t err)
 	return bt_conn_set_security(chan->chan.conn,
 				    chan->chan.required_sec_level);
 }
+#endif //CONFIG_BT_SMP
 
 static void le_conn_rsp(struct bt_l2cap *l2cap, u8_t ident,
 			struct net_buf *buf)
@@ -1120,10 +1095,12 @@ static void le_conn_rsp(struct bt_l2cap *l2cap, u8_t ident,
 		break;
 	case BT_L2CAP_LE_ERR_AUTHENTICATION:
 	case BT_L2CAP_LE_ERR_ENCRYPTION:
+        #if defined(CONFIG_BT_SMP)
 		/* If security needs changing wait it to be completed */
 		if (l2cap_change_security(chan, result) == 0) {
 			return;
 		}
+        #endif
 		bt_l2cap_chan_remove(conn, &chan->chan);
         __attribute__((fallthrough));
 	default:

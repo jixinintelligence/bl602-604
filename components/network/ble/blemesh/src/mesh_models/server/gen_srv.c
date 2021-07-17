@@ -42,7 +42,7 @@ static void gen_onoff_set(struct bt_mesh_model *model,
 			  struct net_buf_simple *buf)
 {
     struct bt_mesh_gen_onoff_srv *srv = model->user_data;
-    u8_t onoff, tid, trans_time, delay;
+    u8_t onoff, tid;// trans_time, delay;
     int64_t recv_time;
 
     if(srv == NULL){

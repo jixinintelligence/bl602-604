@@ -32,16 +32,18 @@
 #include <cli.h>
 #include <bl_wdt.h>
 
+#include <blog.h>
+
 static void cmd_wdt_init(char *buf, int len, int argc, char **argv) 
 {
     int ms = 0;
 
     if (2 != argc) {
-        printf("Usage: %s ms\r\n", argv[0]);
+        log_info("Usage: %s ms\r\n", argv[0]);
         return;
     }
     ms = atoi(argv[1]);
-    printf("Init WDT with %dms\r\n", ms);
+    log_info("Init WDT with %dms\r\n", ms);
     if (ms <= 0) {
         return;
     }
@@ -57,11 +59,18 @@ static void cmd_wdt_disable(char *buf, int len, int argc, char **argv)
 {
     bl_wdt_disable();
 }
+
+static void cmd_timer_start(char *buf, int len, int argc, char **argv) 
+{
+int bl_timer_tick_enable(void);
+    bl_timer_tick_enable();
+}
 // STATIC_CLI_CMD_ATTRIBUTE makes this(these) command(s) static
 const static struct cli_command cmds_user[] STATIC_CLI_CMD_ATTRIBUTE = {
     {"wdt-init", "wdt-init ms", cmd_wdt_init},
     {"wdt-feed", "wdt-feed", cmd_wdt_feed},
     {"wdt-disable", "wdt-disable", cmd_wdt_disable},
+    {"timer-start", "timer-start", cmd_timer_start},
 };                                                                                   
 
 int bl_wdt_cli_init(void)

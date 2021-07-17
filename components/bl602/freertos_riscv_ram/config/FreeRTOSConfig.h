@@ -96,10 +96,21 @@
 //Maybe Compile flags is passed by command line
 #define configUSE_TICKLESS_IDLE			1
 #endif
-#define configCPU_CLOCK_HZ				( 32768 ) /*QEMU*/
+#define configCPU_CLOCK_HZ				( 10 * 1000 * 1000 ) /*QEMU*/
 #define configTICK_RATE_HZ				( ( TickType_t ) 1000 )
 #define configMAX_PRIORITIES			( 32 )
-#define configMINIMAL_STACK_SIZE		( ( unsigned short ) 70 )
+/* Creating idle task */
+/* -1  -> prvInitialiseNewTask: (subtract 1 to get top of stack) pxTopOfStack = &( pxNewTCB->pxStack[ ulStackDepth - ( uint32_t ) 1 ] ); */
+/* -1  -> prvInitialiseNewTask: (subtract 1 in case not matching 8 bytes alignment) pxTopOfStack = ( StackType_t * ) ( ( ( portPOINTER_SIZE_TYPE ) pxTopOfStack ) & ( ~( ( portPOINTER_SIZE_TYPE ) portBYTE_ALIGNMENT_MASK ) ) ); */
+/* Running idle task */
+/* -12 -> prvIdleTask: addi sp, sp, -48 */
+/* -16 -> prvIdleTask.xTaskResumeAll: addi sp, sp, -64 */
+/* Here comes an interrupt after prvIdleTask.xTaskResumeAll.vTaskExitCritical */
+/* -30 -> freertos_risc_v_trap_handler: addi sp, sp, -portCONTEXT_SIZE */
+/* -34 -> portasmSAVE_ADDITIONAL_REGISTERS: addi sp, sp, -(portasmADDITIONAL_CONTEXT_SIZE * portWORD_SIZE) */
+/* Checking for stack overflow */
+/*  4  -> taskCHECK_FOR_STACK_OVERFLOW: if( ( pulStack[ 0 ] != ulCheckValue ) || ( pulStack[ 1 ] != ulCheckValue ) || ( pulStack[ 2 ] != ulCheckValue ) || ( pulStack[ 3 ] != ulCheckValue ) ) */
+#define configMINIMAL_STACK_SIZE		( ( unsigned short ) 98 ) /* SIZE-1-1-12-16-30-34>=4 */
 #define configTOTAL_HEAP_SIZE			( ( size_t ) 14100 )
 #define configMAX_TASK_NAME_LEN			( 16 )
 #define configUSE_TRACE_FACILITY		1

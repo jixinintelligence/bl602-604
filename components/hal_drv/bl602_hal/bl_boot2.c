@@ -123,3 +123,23 @@ PtTable_Error_Type PtTable_Get_Active_Entries(PtTable_Stuff_Config *ptStuff,
     return PT_ERROR_ENTRY_NOT_FOUND;
 }
 
+PtTable_Error_Type PtTable_Get_Active_Entries_By_Name(PtTable_Stuff_Config *ptStuff,
+                                                    uint8_t *name,
+                                                    PtTable_Entry_Config *ptEntry)
+{
+    uint32_t i=0;
+    uint32_t len=strlen((char *)name);
+
+    if(ptStuff==NULL||ptEntry==NULL){
+        return PT_ERROR_PARAMETER;
+    }   
+    for (i=0; i < ptStuff->ptTable.entryCnt; i++) {
+        if (strlen((char *)ptStuff->ptEntries[i].name) == len &&
+        memcmp((char *)ptStuff->ptEntries[i].name,(char *)name,len) == 0){ 
+        BL602_MemCpy_Fast(ptEntry,&ptStuff->ptEntries[i],sizeof(PtTable_Entry_Config));
+        return PT_ERROR_SUCCESS;
+        }   
+    }   
+    return PT_ERROR_ENTRY_NOT_FOUND;
+}
+

@@ -573,6 +573,19 @@ static void prvAddNewTaskToReadyList( TCB_t *pxNewTCB ) PRIVILEGED_FUNCTION;
 
 /*-----------------------------------------------------------*/
 
+StackType_t *xTaskGetStackBase(TaskHandle_t xTask)
+{
+  TCB_t *pxTCB;
+
+	/* If null is passed in here then the name of the calling task is being
+	queried. */
+	pxTCB = prvGetTCBFromHandle( xTask );
+	if (pxTCB == NULL)
+	  return NULL;
+  else
+	  return pxTCB->pxStack;
+}
+
 #if( configSUPPORT_STATIC_ALLOCATION == 1 )
 
 	TaskHandle_t xTaskCreateStatic(	TaskFunction_t pxTaskCode,
@@ -2599,6 +2612,60 @@ implementations require configUSE_TICKLESS_IDLE to be set to a value other than
 #endif /* configUSE_TICKLESS_IDLE */
 /*----------------------------------------------------------*/
 
+void vTaskStepTickSafe( const TickType_t xTicksToJump )
+{
+	TCB_t * pxTCB;
+	TickType_t xTickDelta = ( TickType_t ) 0 - xTickCount;
+
+	if( xTicksToJump >= xTickDelta )
+	{
+		for( ;; )
+		{
+			if( listLIST_IS_EMPTY( pxDelayedTaskList ) != pdFALSE )
+			{
+				/* The delayed list is empty. */
+				break;
+			}
+			else
+			{
+				/* The delayed list is not empty, get the value of the
+				item at the head of the delayed list.  This is the time
+				at which the task at the head of the delayed list must
+				be removed from the Blocked state. */
+				pxTCB = listGET_OWNER_OF_HEAD_ENTRY( pxDelayedTaskList ); /*lint !e9079 void * is used as this macro is used with timers and co-routines too.  Alignment is known to be fine as the type of the pointer stored and retrieved is the same. */
+
+				/* It is time to remove the item from the Blocked state. */
+				( void ) uxListRemove( &( pxTCB->xStateListItem ) );
+
+				/* Is the task waiting on an event also?  If so remove
+				it from the event list. */
+				if( listLIST_ITEM_CONTAINER( &( pxTCB->xEventListItem ) ) != NULL )
+				{
+					( void ) uxListRemove( &( pxTCB->xEventListItem ) );
+				}
+				else
+				{
+					mtCOVERAGE_TEST_MARKER();
+				}
+
+				/* Place the unblocked task into the appropriate ready
+				list. */
+				prvAddTaskToReadyList( pxTCB );
+			}
+		}
+
+		taskSWITCH_DELAYED_LISTS();
+	}
+	else
+	{
+		mtCOVERAGE_TEST_MARKER();
+	}
+
+	xTickCount += xTicksToJump;
+	traceINCREASE_TICK_COUNT( xTicksToJump );
+}
+/*-----------------------------------------------------------*/
+
 #if ( INCLUDE_xTaskAbortDelay == 1 )
 
 	BaseType_t xTaskAbortDelay( TaskHandle_t xTask )
@@ -2680,6 +2747,17 @@ BaseType_t xTaskIncrementTick( void )
 TCB_t * pxTCB;
 TickType_t xItemValue;
 BaseType_t xSwitchRequired = pdFALSE;
+
+#if 1
+	uint32_t tmp;
+
+	/* Do not increment tick if FreeRTOS clock is faster than RTC clock */
+	extern int bl_sys_time_sync_state(uint32_t *xTicksToJump);
+	if( bl_sys_time_sync_state(&tmp) == 0 )
+	{
+		return pdFALSE;
+	}
+#endif
 
 	/* Called by the portable layer each time a tick interrupt occurs.
 	Increments the tick then checks to see if the new tick value will cause any
@@ -4399,7 +4477,9 @@ TCB_t *pxTCB;
 				pcWriteBuffer = prvWriteNameToBuffer( pcWriteBuffer, pxTaskStatusArray[ x ].pcTaskName );
 
 				/* Write the rest of the string. */
-				sprintf( pcWriteBuffer, "\t%c\t%u\t%u\t%u\r\n", cStatus, ( unsigned int ) pxTaskStatusArray[ x ].uxCurrentPriority, ( unsigned int ) pxTaskStatusArray[ x ].usStackHighWaterMark, ( unsigned int ) pxTaskStatusArray[ x ].xTaskNumber ); /*lint !e586 sprintf() allowed as this is compiled with many compilers and this is a utility function only - not part of the core kernel implementation. */
+				sprintf( pcWriteBuffer, "\t%c\t%u\t%u\t%u\t%p\r\n", cStatus, ( unsigned int ) pxTaskStatusArray[ x ].uxCurrentPriority, ( unsigned int ) pxTaskStatusArray[ x ].usStackHighWaterMark, ( unsigned int ) pxTaskStatusArray[ x ].xTaskNumber,
+                        pxTaskStatusArray[ x ].pxStackBase
+                ); /*lint !e586 sprintf() allowed as this is compiled with many compilers and this is a utility function only - not part of the core kernel implementation. */
 				pcWriteBuffer += strlen( pcWriteBuffer ); /*lint !e9016 Pointer arithmetic ok on char pointers especially as in this case where it best denotes the intent of the code. */
 			}
 

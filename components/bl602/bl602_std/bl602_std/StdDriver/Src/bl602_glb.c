@@ -139,6 +139,11 @@ GLB_ROOT_CLK_Type ATTR_CLOCK_SECTION GLB_Get_Root_CLK_Sel(void)
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION GLB_Set_System_CLK_Div(uint8_t hclkDiv,uint8_t bclkDiv)
 {
+    /***********************************************************************************/
+    /*                                 NOTE                                            */
+    /* "GLB_REG_BCLK_DIS_TRUE + GLB_REG_BCLK_DIS_FALSE" will stop bclk a little while. */
+    /* OCRAM use bclk as source clock. Pay attention to risks when using this API.     */
+    /***********************************************************************************/
     uint32_t tmpVal;
     
     /* recommended: fclk<=160MHz, bclk<=80MHz */
@@ -253,6 +258,7 @@ BL_Err_Type ATTR_CLOCK_SECTION Update_SystemCoreClockWith_XTAL(GLB_PLL_XTAL_Type
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION GLB_Set_System_CLK(GLB_PLL_XTAL_Type xtalType,GLB_SYS_CLK_Type clkFreq)
 {
@@ -345,6 +351,7 @@ BL_Err_Type ATTR_CLOCK_SECTION GLB_Set_System_CLK(GLB_PLL_XTAL_Type xtalType,GLB
 
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  This is demo for user that use RC32M as default bootup clock instead of PLL,when APP is
@@ -355,6 +362,7 @@ BL_Err_Type ATTR_CLOCK_SECTION GLB_Set_System_CLK(GLB_PLL_XTAL_Type xtalType,GLB
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION System_Core_Clock_Update_From_RC32M(void)
 {
@@ -378,6 +386,7 @@ BL_Err_Type ATTR_CLOCK_SECTION System_Core_Clock_Update_From_RC32M(void)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  set BLE clock
@@ -683,6 +692,7 @@ BL_Err_Type GLB_Set_SPI_CLK(uint8_t enable,uint8_t div)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_CLOCK_SECTION GLB_Set_PKA_CLK_Sel(GLB_PKA_CLK_Type clkSel)
 {
@@ -696,6 +706,7 @@ BL_Err_Type ATTR_CLOCK_SECTION GLB_Set_PKA_CLK_Sel(GLB_PKA_CLK_Type clkSel)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Software system reset
@@ -709,6 +720,11 @@ BL_Err_Type ATTR_CLOCK_SECTION GLB_Set_PKA_CLK_Sel(GLB_PKA_CLK_Type clkSel)
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION GLB_SW_System_Reset(void)
 {
+    /***********************************************************************************/
+    /*                                 NOTE                                            */
+    /* "GLB_REG_BCLK_DIS_TRUE + GLB_REG_BCLK_DIS_FALSE" will stop bclk a little while. */
+    /* OCRAM use bclk as source clock. Pay attention to risks when using this API.     */
+    /***********************************************************************************/
     uint32_t tmpVal;
     
     /* Swicth clock to 32M as default */
@@ -760,6 +776,11 @@ BL_Err_Type ATTR_TCM_SECTION GLB_SW_System_Reset(void)
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION GLB_SW_CPU_Reset(void)
 {
+    /***********************************************************************************/
+    /*                                 NOTE                                            */
+    /* "GLB_REG_BCLK_DIS_TRUE + GLB_REG_BCLK_DIS_FALSE" will stop bclk a little while. */
+    /* OCRAM use bclk as source clock. Pay attention to risks when using this API.     */
+    /***********************************************************************************/
     uint32_t tmpVal;
     
     /* Swicth clock to 32M as default */
@@ -811,6 +832,11 @@ BL_Err_Type ATTR_TCM_SECTION GLB_SW_CPU_Reset(void)
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION GLB_SW_POR_Reset(void)
 {
+    /***********************************************************************************/
+    /*                                 NOTE                                            */
+    /* "GLB_REG_BCLK_DIS_TRUE + GLB_REG_BCLK_DIS_FALSE" will stop bclk a little while. */
+    /* OCRAM use bclk as source clock. Pay attention to risks when using this API.     */
+    /***********************************************************************************/
     uint32_t tmpVal;
     
     /* Swicth clock to 32M as default */
@@ -851,9 +877,9 @@ BL_Err_Type ATTR_TCM_SECTION GLB_SW_POR_Reset(void)
 #endif
 
 /****************************************************************************//**
- * @brief  Reset BMX slave1
+ * @brief  Reset slave 1
  *
- * @param  slave1: BMX slave1 type
+ * @param  slave1: slave num
  *
  * @return SUCCESS or ERROR
  *
@@ -866,12 +892,14 @@ BL_Err_Type GLB_AHB_Slave1_Reset(BL_AHB_Slave1_Type slave1)
     tmpVal &=(~(1<<slave1));
     BL_WR_REG(GLB_BASE,GLB_SWRST_CFG1,tmpVal);
     BL_DRV_DUMMY;
+    tmpVal=BL_RD_REG(GLB_BASE,GLB_SWRST_CFG1);
     tmpVal |=(1<<slave1);
     BL_WR_REG(GLB_BASE,GLB_SWRST_CFG1,tmpVal);
     BL_DRV_DUMMY;
+    tmpVal=BL_RD_REG(GLB_BASE,GLB_SWRST_CFG1);
     tmpVal &=(~(1<<slave1));
     BL_WR_REG(GLB_BASE,GLB_SWRST_CFG1,tmpVal);
-
+    
     return SUCCESS;
 }
 
@@ -879,7 +907,7 @@ BL_Err_Type GLB_AHB_Slave1_Reset(BL_AHB_Slave1_Type slave1)
  * @brief  clock gate
  *
  * @param  enable: ENABLE or DISABLE
- * @param  slave1: AHB slave1 type
+ * @param  slave1: AHB slaveClk type
  *
  * @return SUCCESS or ERROR
  *
@@ -888,12 +916,19 @@ BL_Err_Type GLB_AHB_Slave1_Clock_Gate(uint8_t enable,BL_AHB_Slave1_Type slave1)
 {
     uint32_t tmpVal = 0;
     
+    if((BL_AHB_SLAVE1_GLB==slave1)||(BL_AHB_SLAVE1_TZ2==slave1)|| \
+       (BL_AHB_SLAVE1_CCI==slave1)||(BL_AHB_SLAVE1_L1C==slave1)|| \
+       (BL_AHB_SLAVE1_PDS_HBN_AON_HBNRAM==slave1)){
+       /* not support */
+       return ERROR;
+    }
+    
     tmpVal=BL_RD_REG(GLB_BASE,GLB_CGEN_CFG1);
     if(enable){
         /* clear bit means clock gate */
         tmpVal &=(~(1<<slave1));
     }else{
-        /* clear bit means clock pass */
+        /* set bit means clock pass */
         tmpVal |=(1<<slave1);
     }
     BL_WR_REG(GLB_BASE,GLB_CGEN_CFG1,tmpVal);
@@ -920,6 +955,11 @@ BL_Err_Type GLB_BMX_Init(BMX_Cfg_Type *BmxCfg)
     tmpVal=BL_SET_REG_BITS_VAL(tmpVal,GLB_BMX_ERR_EN,BmxCfg->errEn);
     tmpVal=BL_SET_REG_BITS_VAL(tmpVal,GLB_BMX_ARB_MODE,BmxCfg->arbMod);
     BL_WR_REG(GLB_BASE,GLB_BMX_CFG1,tmpVal);
+    
+#ifndef BFLB_USE_HAL_DRIVER
+    //Interrupt_Handler_Register(BMX_ERR_IRQn,BMX_ERR_IRQHandler);
+    //Interrupt_Handler_Register(BMX_TO_IRQn,BMX_TO_IRQHandler);
+#endif
     
     return SUCCESS;
 }
@@ -1062,7 +1102,7 @@ BL_Err_Type BMX_ERR_INT_Callback_Install(BMX_ERR_INT_Type intType,intCallback_Ty
  *
 *******************************************************************************/
 #ifndef BL602_USE_HAL_DRIVER
-void __IRQ BMX_ERR_IRQHandler(void)
+void BMX_ERR_IRQHandler(void)
 {
     BMX_ERR_INT_Type intType;
     
@@ -1106,7 +1146,7 @@ BL_Err_Type BMX_TIMEOUT_INT_Callback_Install(BMX_TO_INT_Type intType,intCallback
  *
 *******************************************************************************/
 #ifndef BL602_USE_HAL_DRIVER
-void __IRQ BMX_TO_IRQHandler(void)
+void BMX_TO_IRQHandler(void)
 {
     BMX_TO_INT_Type intType;
     
@@ -1122,34 +1162,6 @@ void __IRQ BMX_TO_IRQHandler(void)
     }
 }
 #endif
-
-/****************************************************************************//**
- * @brief  set OCRAM IDLE
- *
- * @param  None
- *
- * @return SUCCESS or ERROR
- *
-*******************************************************************************/
-BL_Err_Type GLB_Set_OCRAM_Idle(void)
-{
-    uint32_t tmpVal = 0;
-
-    tmpVal=BL_RD_REG(GLB_BASE,GLB_MBIST_CTL);
-    tmpVal=BL_SET_REG_BIT(tmpVal,GLB_OCRAM_MBIST_MODE);
-    BL_WR_REG(GLB_BASE,GLB_MBIST_CTL,tmpVal);
-
-
-    tmpVal=BL_RD_REG(PDS_BASE,PDS_RAM1);
-    tmpVal=BL_SET_REG_BITS_VAL(tmpVal,PDS_CR_NP_SRAM_PWR,0);
-    BL_WR_REG(PDS_BASE,PDS_RAM1,tmpVal);
-
-    tmpVal=BL_RD_REG(GLB_BASE,GLB_MBIST_CTL);
-    tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_OCRAM_MBIST_MODE);
-    BL_WR_REG(GLB_BASE,GLB_MBIST_CTL,tmpVal);
-
-    return SUCCESS;
-}
 
 /****************************************************************************//**
  * @brief  set sram_ret value
@@ -1487,11 +1499,7 @@ BL_Err_Type GLB_Set_ADC_CLK(uint8_t enable,GLB_ADC_CLK_Type clkSel,uint8_t div)
     
     tmpVal=BL_RD_REG(GLB_BASE,GLB_GPADC_32M_SRC_CTRL);
     tmpVal=BL_SET_REG_BITS_VAL(tmpVal,GLB_GPADC_32M_CLK_DIV,div);
-    if(clkSel==GLB_ADC_CLK_96M){
-        tmpVal=BL_SET_REG_BITS_VAL(tmpVal,GLB_GPADC_32M_CLK_SEL,0);
-    }else{
-        tmpVal=BL_SET_REG_BITS_VAL(tmpVal,GLB_GPADC_32M_CLK_SEL,1);
-    }
+    tmpVal=BL_SET_REG_BITS_VAL(tmpVal,GLB_GPADC_32M_CLK_SEL,clkSel);
     BL_WR_REG(GLB_BASE,GLB_GPADC_32M_SRC_CTRL,tmpVal);
     
     tmpVal=BL_RD_REG(GLB_BASE,GLB_GPADC_32M_SRC_CTRL);
@@ -1504,7 +1512,6 @@ BL_Err_Type GLB_Set_ADC_CLK(uint8_t enable,GLB_ADC_CLK_Type clkSel,uint8_t div)
     
     return SUCCESS;
 }
-
 
 /****************************************************************************//**
  * @brief  set DAC clock
@@ -1546,7 +1553,6 @@ BL_Err_Type GLB_Set_DAC_CLK(uint8_t enable,GLB_DAC_CLK_Type clkSel,uint8_t div)
      
     return SUCCESS;
 }
-
 
 /****************************************************************************//**
  * @brief  platform wakeup will becomes one of  pds_wakeup source
@@ -1850,8 +1856,6 @@ BL_Err_Type GLB_IR_LED_Driver_Ibias(uint8_t ibias)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
-#ifndef BL602_USE_ROM_DRIVER
-__WEAK
 BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_Init(GLB_GPIO_Cfg_Type *cfg)
 {
     uint8_t gpioPin=cfg->gpioPin;
@@ -1859,66 +1863,95 @@ BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_Init(GLB_GPIO_Cfg_Type *cfg)
     uint32_t pos;
     uint32_t tmpOut;
     uint32_t tmpVal;
-
+    
     pOut=(uint32_t *)(GLB_BASE+GLB_GPIO_OUTPUT_EN_OFFSET+((gpioPin>>5)<<2));
     pos=gpioPin%32;
     tmpOut=*pOut;
+    
     /* Disable output anyway*/
     tmpOut &= (~(1<<pos));
     *pOut=tmpOut;
-
+    
     tmpVal=BL_RD_WORD(GLB_BASE+GLB_GPIO_OFFSET+gpioPin/2*4);
-
     if(gpioPin%2==0){
-        /* Set input or output */
-        if(cfg->gpioMode==GPIO_MODE_OUTPUT){
-            tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_0_IE);
-            tmpOut |= (1<<pos);
+        if(cfg->gpioMode!=GPIO_MODE_ANALOG){
+            /* not analog mode */
+            
+            /* Set input or output */
+            if(cfg->gpioMode==GPIO_MODE_OUTPUT){
+                tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_0_IE);
+                tmpOut |= (1<<pos);
+            }else{
+                tmpVal=BL_SET_REG_BIT(tmpVal,GLB_REG_GPIO_0_IE);
+            }
+            
+            /* Set pull up or down */
+            tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_0_PU);
+            tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_0_PD);
+            if(cfg->pullType==GPIO_PULL_UP){
+                tmpVal=BL_SET_REG_BIT(tmpVal,GLB_REG_GPIO_0_PU);
+            }else if(cfg->pullType==GPIO_PULL_DOWN){
+                tmpVal=BL_SET_REG_BIT(tmpVal,GLB_REG_GPIO_0_PD);
+            }
         }else{
-            tmpVal=BL_SET_REG_BIT(tmpVal,GLB_REG_GPIO_0_IE);
-
+            /* analog mode */
+            
+            /* clear ie && oe */
+            tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_0_IE);
+            tmpOut &= ~(1<<pos);
+            
+            /* clear pu && pd */
+            tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_0_PU);
+            tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_0_PD);
         }
-        /* Set pull up or down */
-        tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_0_PU);
-        tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_0_PD);
-        if(cfg->pullType==GPIO_PULL_UP){
-            tmpVal=BL_SET_REG_BIT(tmpVal,GLB_REG_GPIO_0_PU);
-        }else if(cfg->pullType==GPIO_PULL_DOWN){
-            tmpVal=BL_SET_REG_BIT(tmpVal,GLB_REG_GPIO_0_PD);
-        }
-
+        
+        /* set drive && smt && func */
         tmpVal=BL_SET_REG_BITS_VAL(tmpVal,GLB_REG_GPIO_0_DRV,cfg->drive);
         tmpVal=BL_SET_REG_BITS_VAL(tmpVal,GLB_REG_GPIO_0_SMT,cfg->smtCtrl);
         tmpVal=BL_SET_REG_BITS_VAL(tmpVal,GLB_REG_GPIO_0_FUNC_SEL,cfg->gpioFun);
     }else{
-        /* Set input or output */
-        if(cfg->gpioMode==GPIO_MODE_OUTPUT) {
-            tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_1_IE);
-            tmpOut |= (1<<pos);
+        if(cfg->gpioMode!=GPIO_MODE_ANALOG){
+            /* not analog mode */
+            
+            /* Set input or output */
+            if(cfg->gpioMode==GPIO_MODE_OUTPUT) {
+                tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_1_IE);
+                tmpOut |= (1<<pos);
+            }else{
+                tmpVal=BL_SET_REG_BIT(tmpVal,GLB_REG_GPIO_1_IE);
+            }
+            
+            /* Set pull up or down */
+            tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_1_PU);
+            tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_1_PD);
+            if(cfg->pullType==GPIO_PULL_UP){
+                tmpVal=BL_SET_REG_BIT(tmpVal,GLB_REG_GPIO_1_PU);
+            }else if(cfg->pullType==GPIO_PULL_DOWN){
+                tmpVal=BL_SET_REG_BIT(tmpVal,GLB_REG_GPIO_1_PD);
+            }
         }else{
-            tmpVal=BL_SET_REG_BIT(tmpVal,GLB_REG_GPIO_1_IE);
+            /* analog mode */
+            
+            /* clear ie && oe */
+            tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_1_IE);
+            tmpOut &= ~(1<<pos);
+            
+            /* clear pu && pd */
+            tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_1_PU);
+            tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_1_PD);
         }
-        /* Set pull up or down */
-        tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_1_PU);
-        tmpVal=BL_CLR_REG_BIT(tmpVal,GLB_REG_GPIO_1_PD);
-        if(cfg->pullType==GPIO_PULL_UP){
-            tmpVal=BL_SET_REG_BIT(tmpVal,GLB_REG_GPIO_1_PU);
-        }else if(cfg->pullType==GPIO_PULL_DOWN){
-            tmpVal=BL_SET_REG_BIT(tmpVal,GLB_REG_GPIO_1_PD);
-        }
-
+        
+        /* set drive && smt && func */
         tmpVal=BL_SET_REG_BITS_VAL(tmpVal,GLB_REG_GPIO_1_DRV,cfg->drive);
         tmpVal=BL_SET_REG_BITS_VAL(tmpVal,GLB_REG_GPIO_1_SMT,cfg->smtCtrl);
         tmpVal=BL_SET_REG_BITS_VAL(tmpVal,GLB_REG_GPIO_1_FUNC_SEL,cfg->gpioFun);
     }
-
     BL_WR_WORD(GLB_BASE+GLB_GPIO_OFFSET+gpioPin/2*4,tmpVal);
-
+    
     *pOut=tmpOut;
     
     return SUCCESS;
 }
-#endif
 
 /****************************************************************************//**
  * @brief  init GPIO function in pin list
@@ -1942,7 +1975,7 @@ BL_Err_Type GLB_GPIO_Func_Init(GLB_GPIO_FUNC_Type gpioFun,GLB_GPIO_Type *pinList
     };
     
     if(gpioFun==GPIO_FUN_ANALOG){
-        gpioCfg.pullType=GPIO_PULL_NONE;
+        gpioCfg.gpioMode=GPIO_MODE_ANALOG;
     }
     
     for(uint8_t i=0;i<cnt;i++){
@@ -1961,7 +1994,6 @@ BL_Err_Type GLB_GPIO_Func_Init(GLB_GPIO_FUNC_Type gpioFun,GLB_GPIO_Type *pinList
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
-__WEAK
 BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_INPUT_Enable(GLB_GPIO_Type gpioPin)
 {
     uint32_t tmpVal;
@@ -1989,7 +2021,6 @@ BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_INPUT_Enable(GLB_GPIO_Type gpioPin)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
-__WEAK
 BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_INPUT_Disable(GLB_GPIO_Type gpioPin)
 {
     uint32_t tmpVal;
@@ -2017,6 +2048,7 @@ BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_INPUT_Disable(GLB_GPIO_Type gpioPin)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_OUTPUT_Enable(GLB_GPIO_Type gpioPin)
 {
@@ -2028,6 +2060,7 @@ BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_OUTPUT_Enable(GLB_GPIO_Type gpioPin)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  GPIO set output function disable
@@ -2037,6 +2070,7 @@ BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_OUTPUT_Enable(GLB_GPIO_Type gpioPin)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_OUTPUT_Disable(GLB_GPIO_Type gpioPin)
 {
@@ -2048,6 +2082,7 @@ BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_OUTPUT_Disable(GLB_GPIO_Type gpioPin)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  GPIO set High-Z
@@ -2057,6 +2092,7 @@ BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_OUTPUT_Disable(GLB_GPIO_Type gpioPin)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_Set_HZ(GLB_GPIO_Type gpioPin)
 {
@@ -2088,6 +2124,65 @@ BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_Set_HZ(GLB_GPIO_Type gpioPin)
 
     /* Disable output anyway*/
     *pOut=tmpOut;
+    
+    return SUCCESS;
+}
+#endif
+
+/****************************************************************************//**
+ * @brief  GPIO set Pull up
+ *
+ * @param  gpioPin: GPIO pin
+ *
+ * @return SUCCESS or ERROR
+ *
+*******************************************************************************/
+__WEAK
+BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_Set_PullUp(GLB_GPIO_Type gpioPin)
+{
+    uint32_t tmpVal;
+    
+    tmpVal=BL_RD_WORD(GLB_BASE+GLB_GPIO_OFFSET+gpioPin/2*4);
+
+    /* Set Pull up */
+    if(gpioPin%2==0){
+        tmpVal&=(~(1<<5));
+        tmpVal|=(1<<4);
+    }else{
+        tmpVal&=(~(1<<21));
+        tmpVal|=(1<<20);
+    }
+
+    BL_WR_WORD(GLB_BASE+GLB_GPIO_OFFSET+gpioPin/2*4,tmpVal);
+    
+    return SUCCESS;
+}
+
+/****************************************************************************//**
+ * @brief  GPIO set Pull down
+ *
+ * @param  gpioPin: GPIO pin
+ *
+ * @return SUCCESS or ERROR
+ *
+*******************************************************************************/
+__WEAK
+BL_Err_Type ATTR_TCM_SECTION GLB_GPIO_Set_PullDown(GLB_GPIO_Type gpioPin)
+{
+    uint32_t tmpVal;
+    
+    tmpVal=BL_RD_WORD(GLB_BASE+GLB_GPIO_OFFSET+gpioPin/2*4);
+
+    /* Set Pull up */
+    if(gpioPin%2==0){
+        tmpVal&=(~(1<<4));
+        tmpVal|=(1<<5);
+    }else{
+        tmpVal&=(~(1<<20));
+        tmpVal|=(1<<21);
+    }
+
+    BL_WR_WORD(GLB_BASE+GLB_GPIO_OFFSET+gpioPin/2*4,tmpVal);
     
     return SUCCESS;
 }
@@ -2355,6 +2450,23 @@ GLB_GPIO_INT_CONTROL_Type GLB_Get_GPIO_IntCtlMod(GLB_GPIO_Type gpioPin)
 }
 
 /****************************************************************************//**
+ * @brief  GPIO INT0 IRQHandler install
+ *
+ * @param  None
+ *
+ * @return SUCCESS or ERROR
+ *
+*******************************************************************************/
+BL_Err_Type GLB_GPIO_INT0_IRQHandler_Install(void)
+{
+#ifndef BFLB_USE_HAL_DRIVER
+    //Interrupt_Handler_Register(GPIO_INT0_IRQn,GPIO_INT0_IRQHandler);
+#endif
+    
+    return SUCCESS;
+}
+
+/****************************************************************************//**
  * @brief  GPIO interrupt IRQ handler callback install
  *
  * @param  gpioPin: GPIO pin type
@@ -2381,15 +2493,16 @@ BL_Err_Type GLB_GPIO_INT0_Callback_Install(GLB_GPIO_Type gpioPin,intCallback_Typ
  *
 *******************************************************************************/
 #ifndef BL602_USE_HAL_DRIVER
-void __IRQ GPIO_INT0_IRQHandler(void)
+void GPIO_INT0_IRQHandler(void)
 {
     GLB_GPIO_Type gpioPin;
     uint32_t timeOut=0;
-
+    
     for(gpioPin=GLB_GPIO_PIN_0;gpioPin<=GLB_GPIO_PIN_22;gpioPin++){
         if(SET==GLB_Get_GPIO_IntStatus(gpioPin)){
-            GLB_GPIO_IntMask(gpioPin,MASK);
             GLB_GPIO_IntClear(gpioPin,SET);
+            
+            /* timeout check */
             timeOut=GLB_GPIO_INT0_CLEAR_TIMEOUT;
             do{
                 timeOut--;
@@ -2397,9 +2510,10 @@ void __IRQ GPIO_INT0_IRQHandler(void)
             if(!timeOut){
                 MSG("WARNING: Clear GPIO interrupt status fail.\r\n");
             }
+            
             /* if timeOut==0, GPIO interrupt status not cleared */
             GLB_GPIO_IntClear(gpioPin,RESET);
-            GLB_GPIO_IntMask(gpioPin,UNMASK);
+            
             if(glbGpioInt0CbfArra[gpioPin] != NULL) {
                 /* Call the callback function */
                 glbGpioInt0CbfArra[gpioPin]();

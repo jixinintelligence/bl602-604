@@ -72,6 +72,8 @@
 #define HTTPC_DEBUG_REQUEST         0
 #endif
 
+#define HTTPC_CLIENT_AGENT "lwIP/" LWIP_VERSION_STRING
+
 /** This string is passed in the HTTP header as "User-Agent: " */
 #ifndef HTTPC_CLIENT_AGENT
 #define HTTPC_CLIENT_AGENT "lwIP/" LWIP_VERSION_STRING " (http://savannah.nongnu.org/projects/lwip)"
@@ -88,6 +90,24 @@
 #define HTTPC_POLL_TIMEOUT      30 /* 15 seconds */
 
 #define HTTPC_CONTENT_LEN_INVALID 0xFFFFFFFF
+
+const char *g_cont_type[] = {
+   [CONTENT_TYPE_WWW]  = "application/x-www-form-urlencoded",
+   [CONTENT_TYPE_JSON] = "application/json",
+   [CONTENT_TYPE_MULT] = "multipart/form-data",
+   [CONTENT_TYPE_TEXT] = "text/xml",
+};
+#define HTTPC_CONT_TYPE(type) (type>CONTENT_TYPE_TEXT)?NULL:g_cont_type[type]
+#define HTTPC_REQ_POST_11 "POST %s HTTP/1.1\r\n" /* URI */\
+    "Content-Type: %s\r\n" \
+    "Content-Length: %d\r\n" \
+    "User-Agent: %s\r\n" /* User-Agent */ \
+    "Host: %s\r\n" \
+    "Accept: */*\r\n" \
+    "Connection: Close\r\n" /* we don't support persistent connections, yet */ \
+    "\r\n" \
+    "%s"
+#define HTTPC_REQ_POST_11_HOST_FORMAT(uri, type, srv_name, body, len) HTTPC_REQ_POST_11, uri, HTTPC_CONT_TYPE(type), len, HTTPC_CLIENT_AGENT, srv_name, body
 
 /* GET request basic */
 #define HTTPC_REQ_11 "GET %s HTTP/1.1\r\n" /* URI */\
@@ -498,6 +518,10 @@ httpc_create_request_string(const httpc_connection_t *settings, const char* serv
     }
   } else if (use_host) {
     LWIP_ASSERT("server_name != NULL", server_name != NULL);
+    if (settings->req_type == REQ_TYPE_POST) {
+        return snprintf(buffer, buffer_size,
+                HTTPC_REQ_POST_11_HOST_FORMAT(uri, settings->content_type, server_name, settings->data, strlen((const char *)settings->data)));
+    }
     return snprintf(buffer, buffer_size, HTTPC_REQ_11_HOST_FORMAT(uri, server_name));
   } else {
     return snprintf(buffer, buffer_size, HTTPC_REQ_11_FORMAT(uri));

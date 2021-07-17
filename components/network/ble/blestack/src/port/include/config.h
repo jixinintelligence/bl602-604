@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 #ifndef BLE_CONFIG_H
 #define BLE_CONFIG_H
 
@@ -47,6 +18,11 @@
 #define CONFIG_BT_SMP_ALLOW_UNAUTH_OVERWRITE 1
 
 #if defined(CONFIG_BT_STACK_PTS)
+
+#ifndef  PTS_CHARC_LEN_EQUAL_MTU_SIZE
+#define  PTS_CHARC_LEN_EQUAL_MTU_SIZE	
+#endif
+
 
 //#ifndef  CONFIG_BT_STACK_PTS_SM_SLA_KDU_BI_01
 //#define  CONFIG_BT_STACK_PTS_SM_SLA_KDU_BI_01	
@@ -80,7 +56,11 @@
 #endif
 
 #ifndef CONFIG_BT_RX_STACK_SIZE
+#if defined(CONFIG_BT_MESH)
+#define CONFIG_BT_RX_STACK_SIZE  3072//2048//1536//1024
+#else
 #define CONFIG_BT_RX_STACK_SIZE  2048//1536//1024
+#endif
 #endif
 
 #ifndef CONFIG_BT_CTLR_RX_PRIO_STACK_SIZE
@@ -113,10 +93,17 @@
 
 
 /**
+ * BL_BLE_CO_THREAD: combine tx rx thread
+ */
+ #ifndef BFLB_BLE_CO_THREAD
+ #define BFLB_BLE_CO_THREAD 0
+#endif
+
+/**
 * CONFIG_BT_HCI_CMD_COUNT: hci cmd buffer count,range 2 to 64
 */
 #ifndef CONFIG_BT_HCI_CMD_COUNT
-#define CONFIG_BT_HCI_CMD_COUNT 4//2
+#define CONFIG_BT_HCI_CMD_COUNT 2
 #endif
 
 /**
@@ -124,7 +111,21 @@
 * events,range 2 to 255
 */
 #ifndef CONFIG_BT_RX_BUF_COUNT
+
+#if defined(CONFIG_BT_MESH)
 #define CONFIG_BT_RX_BUF_COUNT 10
+#else
+#define CONFIG_BT_RX_BUF_COUNT 5
+#endif //CONFIG_BT_MESH
+#endif
+
+/**
+* CONFIG_BT_RX_BUF_RSV_COUNT: number of buffer that HCI_LE_EVENT reserved
+* events,range 1 to CONFIG_BT_RX_BUF_COUNT
+*/
+#define CONFIG_BT_RX_BUF_RSV_COUNT (1)
+#if (CONFIG_BT_RX_BUF_RSV_COUNT >= CONFIG_BT_RX_BUF_COUNT)
+#error "CONFIG_BT_RX_BUF_RSV_COUNT config error"
 #endif
 
 /**
@@ -132,11 +133,11 @@
 * range 73 to 2000
 */
 #ifndef CONFIG_BT_RX_BUF_LEN
+#if defined(CONFIG_BT_BREDR)
+#define CONFIG_BT_RX_BUF_LEN 680 //CONFIG_BT_L2CAP_RX_MTU + 4 + 4
+#else
 #define CONFIG_BT_RX_BUF_LEN 255 //108 //76
 #endif
-
-#ifndef CONFIG_MAX_TIMER_REC
-#define CONFIG_MAX_TIMER_REC 5
 #endif
 
 /**
@@ -169,7 +170,7 @@
 #ifdef CONFIG_BT_CONN 
 
 #ifndef CONFIG_BT_CREATE_CONN_TIMEOUT
-#define CONFIG_BT_CREATE_CONN_TIMEOUT 3
+#define CONFIG_BT_CREATE_CONN_TIMEOUT 3 
 #endif
 
 #if defined(BFLB_BLE)
@@ -182,7 +183,7 @@
 * range 2 to 255
 */
 #ifndef CONFIG_BT_L2CAP_TX_BUF_COUNT
-#define CONFIG_BT_L2CAP_TX_BUF_COUNT 10
+#define CONFIG_BT_L2CAP_TX_BUF_COUNT CFG_BLE_TX_BUFF_DATA
 #endif
 
 /**
@@ -193,7 +194,7 @@
 #ifdef CONFIG_BT_SMP
 #define CONFIG_BT_L2CAP_TX_MTU 247 //96 //65
 #else
-#define CONFIG_BT_L2CAP_TX_MTU 23
+#define CONFIG_BT_L2CAP_TX_MTU 247 //23
 #endif
 #endif
 
@@ -205,8 +206,7 @@
 #define CONFIG_BT_L2CAP_TX_USER_DATA_SIZE 4
 #endif
 
-
-#if defined(CONFIG_BT_STACK_PTS)&& defined(PTS_GAP_SLAVER_CONFIG_WRITE_CHARC)
+#if defined(CONFIG_BT_STACK_PTS)&& (defined(PTS_GAP_SLAVER_CONFIG_WRITE_CHARC) || defined(PTS_TEST_CASE_INSUFFICIENT_KEY))
 #define CONFIG_BT_ATT_PREPARE_COUNT 64
 #else
 /**
@@ -293,7 +293,7 @@
 */
 #ifndef CONFIG_BT_RPA_TIMEOUT
 #if defined(CONFIG_BT_STACK_PTS)
-#define CONFIG_BT_RPA_TIMEOUT 5
+#define CONFIG_BT_RPA_TIMEOUT 900
 #else
 #define CONFIG_BT_RPA_TIMEOUT 900
 #endif
@@ -354,19 +354,21 @@
 #ifndef CONFIG_BT_DEVICE_NAME
 #if defined(BL602)
 #define CONFIG_BT_DEVICE_NAME "BL602-BLE-DEV"
+#elif defined(BL702)
+#define CONFIG_BT_DEVICE_NAME "BL702-BLE-DEV"
 #else
-#define CONFIG_BT_DEVICE_NAME "BL70X-BLE-DEV"
+#define CONFIG_BT_DEVICE_NAME "BL606P-BTBLE"
 #endif
 #endif
 
 /**
-*  CONFIG_BT_CONTROLLER_NAME:Bluetooth controller name. default support ESP32.
+*  CONFIG_BT_CONTROLLER_NAME:Bluetooth controller name.
 */
 #ifndef CONFIG_BT_CONTROLLER_NAME
 #if defined(BL602)
 #define CONFIG_BT_CONTROLLER_NAME "BL602-BLE-DEV"
 #else
-#define CONFIG_BT_CONTROLLER_NAME "BL70X-BLE-DEV"
+#define CONFIG_BT_CONTROLLER_NAME "BL702-BLE-DEV"
 #endif
 #endif
 
@@ -381,7 +383,11 @@
 *  CONFIG_BT_WORK_QUEUE_STACK_SIZE:Work queue stack size.
 */
 #ifndef CONFIG_BT_WORK_QUEUE_STACK_SIZE
+#ifndef CONFIG_BT_MESH
 #define CONFIG_BT_WORK_QUEUE_STACK_SIZE 1536//1280//512
+#else
+#define CONFIG_BT_WORK_QUEUE_STACK_SIZE 2048
+#endif /* CONFIG_BT_MESH */
 #endif
 
 /**
@@ -485,11 +491,18 @@
 #endif
 
 #ifndef CONFIG_BT_ATT_TX_MAX
-#define CONFIG_BT_ATT_TX_MAX CONFIG_BT_MAX_CONN
+/*
+*  Take throuthput test into consideration, set att tx max the same with lowstack tx buffer count.
+*  att semaphore determine the max numble packets can send to lowsatck at once.
+*/
+#define CONFIG_BT_ATT_TX_MAX 10
 #endif
 
 #ifndef CONFIG_BT_CONN_TX_MAX
-#define CONFIG_BT_CONN_TX_MAX CONFIG_BT_MAX_CONN
+/*
+*  Take throuthput test into consideration, set upperstack conn tx max the same with lowstack tx buffer count.
+*/
+#define CONFIG_BT_CONN_TX_MAX 10
 #endif
 
 #ifndef CONFIG_BT_DEVICE_APPEARANCE
@@ -509,6 +522,8 @@
 #define CONFIG_BT_ID_MAX 1
 #endif
 
+//#define PTS_GAP_SLAVER_CONFIG_NOTIFY_CHARC 1
+
 #ifndef CONFIG_BT_L2CAP_TX_FRAG_COUNT
 #define CONFIG_BT_L2CAP_TX_FRAG_COUNT 0
 #endif
@@ -517,7 +532,11 @@
 #define CONFIG_BT_DEVICE_NAME_DYNAMIC 1
 #endif
 
-#define CONFIG_BT_DEVICE_NAME_MAX 20
+// max lenght of ADV payload is 37 bytes (by BT core spec)
+// AdvA field takes up 6 bytes
+// if only Local Name is appended, then max lenght of Local Name shall be
+// 37-6-2=31 bytes, where UUID of Local Name takes up 2 bytes
+#define CONFIG_BT_DEVICE_NAME_MAX 29
 
 #if defined(CONFIG_BT_GAP_PERIPHERAL_PREF_PARAMS)
 #define CONFIG_BT_PERIPHERAL_PREF_MIN_INT 0x0018
@@ -526,20 +545,50 @@
 #define CONFIG_BT_PERIPHERAL_PREF_TIMEOUT 400
 #endif
 
+#if defined(CONFIG_BT_BREDR)
+#define CONFIG_BT_PAGE_TIMEOUT 0x2000 //5.12s
+#define CONFIG_BT_L2CAP_RX_MTU 672
+
+#ifndef CONFIG_BT_RFCOMM_TX_STACK_SIZE
+#define CONFIG_BT_RFCOMM_TX_STACK_SIZE  1024
+#endif
+#ifndef CONFIG_BT_RFCOMM_TX_PRIO
+#define CONFIG_BT_RFCOMM_TX_PRIO (configMAX_PRIORITIES - 3)
+#endif
+
+#define PCM_PRINTF 0
+#endif
+
+/*******************************Bouffalo Lab Modification******************************/
+
 //#define BFLB_BLE_DISABLE_STATIC_ATTR
-//#define BFLB_BLE_DISABLE_STATIC_BUF
 //#define BFLB_BLE_DISABLE_STATIC_CHANNEL
+#define BFLB_DISABLE_BT
+#define BFLB_FIXED_IRK 0
+#define BFLB_DYNAMIC_ALLOC_MEM
 #endif //BFLB_BLE
 
-/*******************************BFLB_BLE Patch******************************/
+/*******************************Bouffalo Lab Patch******************************/
+/*Fix the issue that DHKEY_check_failed error happens in smp procedure if CONFIG_BT_PRIVACY is enabled.*/
 #define BFLB_BLE_PATCH_DHKEY_CHECK_FAILED
+/*To notify upper layer that write_ccc is completed*/
 #define BFLB_BLE_PATCH_NOTIFY_WRITE_CCC_RSP
+/*Timer/Queue/Sem allocated during connection establishment is not released when disconnection
+happens, which cause memory leak issue.*/
 #define BFLB_BLE_PATCH_FREE_ALLOCATED_BUFFER_IN_OS
-#define BFLB_BLE_PATCH_AVOID_SEC_GATT_DISC
+/*To avoid duplicated pubkey callback.*/
 #define BFLB_BLE_PATCH_AVOID_DUPLI_PUBKEY_CB
-#define BFLB_BLE_PATCH_CLEAN_UP_CONNECT_REF   /*The flag @conn_ref is not clean up after disconnect*/ 
+/*The flag @conn_ref is not clean up after disconnect*/
+#define BFLB_BLE_PATCH_CLEAN_UP_CONNECT_REF 
+/*To avoid sevice changed indication sent at the very beginning, without any new service added.*/
+#define BFLB_BLE_PATCH_SET_SCRANGE_CHAGD_ONLY_IN_CONNECTED_STATE
 #ifdef CONFIG_BT_SETTINGS
+/*Semaphore is used during flash operation. Make sure that freertos has already run up when it
+  intends to write information to flash.*/
 #define BFLB_BLE_PATCH_SETTINGS_LOAD
+#endif
+#if defined(CFG_BT_RESET)
+#define BFLB_HOST_ASSISTANT
 #endif
 #if defined(__cplusplus)
 }

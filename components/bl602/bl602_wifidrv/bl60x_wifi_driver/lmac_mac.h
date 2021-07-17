@@ -152,6 +152,7 @@ struct mac_ssid
     u8_l length;
     /// Array containing the SSID name.
     u8_l array[MAC_SSID_LEN];
+    u8_l array_tail[1];//for MAX SSID ISSUE
 };
 
 /// MAC RATE-SET
@@ -378,8 +379,6 @@ struct mac_scan_result
 {
     /// Network BSSID.
     struct mac_addr bssid;
-    /// Network name.
-    struct mac_ssid ssid;
     /// Network type (IBSS or ESS).
     u16 bsstype;
     /// Network channel number.

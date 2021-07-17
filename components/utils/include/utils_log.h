@@ -43,6 +43,8 @@
 extern "C" {
 #endif
 
+#define __utils_printf              bl_printk
+
 /* cc */
 /* define compiler specific symbols */
 #if defined (__ICCARM__)
@@ -92,14 +94,14 @@ typedef enum LOG_BUF_OUT_DATA_TYPE {
 
 #ifdef LOG_USE_LINE_FEED
 #define custom_log(N, M, ...) do {  LOG_LOCK_LOCK;\
-                                    bl_printk("[%10u][%s: %s:%4d] " M "\r\n",\
+                                    __utils_printf("[%10u][%s: %s:%4d] " M "\r\n",\
                                     (xPortIsInsideInterrupt())?(xTaskGetTickCountFromISR()):(xTaskGetTickCount()),\
                                     N, SHORT_FILE, __LINE__,\
                                     ##__VA_ARGS__);\
                                     LOG_LOCK_UNLOCK;\
                                     } while(0==1)
 #define custom_buf_pri(file, line, N, M, ...) do {  LOG_LOCK_LOCK;\
-                                    bl_printk("[%10u][%s: %s:%4d] " M, "\r\n",\
+                                    __utils_printf("[%10u][%s: %s:%4d] " M, "\r\n",\
                                     (xPortIsInsideInterrupt())?(xTaskGetTickCountFromISR()):(xTaskGetTickCount()),\
                                     N, file, line,\
                                     ##__VA_ARGS__);\
@@ -107,14 +109,14 @@ typedef enum LOG_BUF_OUT_DATA_TYPE {
                                     } while(0==1)
 #else
 #define custom_log(N, M, ...) do {  LOG_LOCK_LOCK;\
-                                    bl_printk("[%10u][%s: %s:%4d] " M,\
+                                    __utils_printf("[%10u][%s: %s:%4d] " M,\
                                     (xPortIsInsideInterrupt())?(xTaskGetTickCountFromISR()):(xTaskGetTickCount()),\
                                     N, SHORT_FILE, __LINE__,\
                                     ##__VA_ARGS__);\
                                     LOG_LOCK_UNLOCK;\
                                     } while(0==1)
 #define custom_buf_pri(file, line, N, M, ...) do {  LOG_LOCK_LOCK;\
-                                    bl_printk("[%10u][%s: %s:%4d] " M,\
+                                    __utils_printf("[%10u][%s: %s:%4d] " M,\
                                     (xPortIsInsideInterrupt())?(xTaskGetTickCountFromISR()):(xTaskGetTickCount()),\
                                     N, file, line,\
                                     ##__VA_ARGS__);\
@@ -151,7 +153,7 @@ typedef enum LOG_BUF_OUT_DATA_TYPE {
                             log_info("compile time = %s\r\n", __TIME__);\
                             } while (0 == 1);
 
-int log_buf_out(const char *file, int line, void *inbuf, int len, LOG_BUF_OUT_DATA_TYPE_T type);
+int log_buf_out(const char *file, int line, const void *inbuf, int len, LOG_BUF_OUT_DATA_TYPE_T type);
 
 void bl_printk(const char *format, ...);
 

@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 /** @file
  *  @brief Generic Attribute Profile handling.
  */
@@ -837,6 +808,9 @@ struct bt_gatt_notify_params {
 	/** Notification Value callback user data */
 	void *user_data;
 };
+#if defined(CONFIG_BLE_AT_CMD)
+int bt_gatt_notify_at_cb(struct bt_conn *conn,struct bt_gatt_notify_params *params, u16_t attr_handle);
+#endif
 
 /** @brief Notify attribute value change.
  *
@@ -949,7 +923,10 @@ struct bt_gatt_indicate_params {
 int bt_gatt_indicate(struct bt_conn *conn,
 		     struct bt_gatt_indicate_params *params);
 
+#if defined(CONFIG_BT_STACK_PTS)
+int service_change_test(struct bt_gatt_indicate_params *params,const struct bt_conn *con);
 
+#endif
 /** @brief Check if connection have subscribed to attribute
  *
  *  Check if connection has subscribed to attribute value change.
@@ -1011,6 +988,10 @@ struct bt_gatt_exchange_params {
  */
 int bt_gatt_exchange_mtu(struct bt_conn *conn,
 			 struct bt_gatt_exchange_params *params);
+
+#if defined(CONFIG_BLE_AT_CMD)
+int bt_at_gatt_exchange_mtu(struct bt_conn *conn, struct bt_gatt_exchange_params *params,u16_t mtu_size);			 
+#endif
 
 struct bt_gatt_discover_params;
 
@@ -1391,10 +1372,6 @@ void bt_gatt_cancel(struct bt_conn *conn, void *params);
  *  @param void.
  */
 void bt_gatt_ccc_load(void);
-#endif
-
-#ifdef BFLB_BLE_PATCH_AVOID_SEC_GATT_DISC
-void bt_gatt_cancle_sc_work(void);
 #endif
 
 #ifdef __cplusplus

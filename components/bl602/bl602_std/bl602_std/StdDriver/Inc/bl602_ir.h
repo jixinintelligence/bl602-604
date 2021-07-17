@@ -38,6 +38,7 @@
 
 #include "ir_reg.h"
 #include "bl602_common.h"
+#include "bl602_hbn.h"
 
 /** @addtogroup  BL602_Peripheral_Driver
  *  @{
@@ -225,6 +226,7 @@ BL_Err_Type IR_SendData(IR_Word_Type irWord,uint32_t data);
 BL_Err_Type IR_SWMSendData(uint16_t *data,uint8_t length);
 BL_Err_Type IR_SendCommand(uint32_t word1,uint32_t word0);
 BL_Err_Type IR_SWMSendCommand(uint16_t *data,uint8_t length);
+BL_Err_Type IR_SendNEC(uint8_t address,uint8_t command);
 BL_Err_Type IR_IntMask(IR_INT_Type intType,BL_Mask_Type intMask);
 BL_Err_Type IR_ClrIntStatus(IR_INT_Type intType);
 BL_Err_Type IR_Int_Callback_Install(IR_INT_Type intType,intCallback_Type *cbFun);
@@ -232,11 +234,15 @@ BL_Sts_Type IR_GetIntStatus(IR_INT_Type intType);
 BL_Sts_Type IR_GetRxFIFOStatus(IR_FifoStatus_Type fifoSts);
 uint32_t IR_ReceiveData(IR_Word_Type irWord);
 uint8_t IR_SWMReceiveData(uint16_t *data,uint8_t length);
+BL_Err_Type IR_ReceiveNEC(uint8_t *address,uint8_t *command);
 uint8_t IR_GetRxDataBitCount(void);
 uint8_t IR_GetRxFIFOCount(void);
 IR_RxMode_Type IR_LearnToInit(uint32_t *data,uint8_t *length);
 BL_Err_Type IR_LearnToSend(IR_RxMode_Type mode,uint32_t *data,uint8_t length);
 uint8_t IR_LearnToReceive(IR_RxMode_Type mode,uint32_t *data);
+BL_Sts_Type IR_LEDInit(HBN_XCLK_CLK_Type clk,uint8_t div,uint8_t unit,uint8_t code0H,uint8_t code0L,uint8_t code1H,
+                       uint8_t code1L);
+BL_Sts_Type IR_LEDSend(uint32_t data);
 
 /*@} end of group IR_Public_Functions */
 

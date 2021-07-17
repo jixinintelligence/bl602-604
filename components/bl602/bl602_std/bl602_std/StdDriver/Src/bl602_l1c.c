@@ -96,6 +96,7 @@ static intCallback_Type * l1cBmxToIntCbfArra[L1C_BMX_TO_INT_ALL]={NULL};
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION L1C_Set_Wrap(BL_Fun_Type wrap)
 {
@@ -124,6 +125,7 @@ BL_Err_Type ATTR_TCM_SECTION L1C_Set_Wrap(BL_Fun_Type wrap)
 
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  cache way disable set
@@ -133,6 +135,7 @@ BL_Err_Type ATTR_TCM_SECTION L1C_Set_Wrap(BL_Fun_Type wrap)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION L1C_Set_Way_Disable(uint8_t disableVal)
 {
@@ -157,6 +160,7 @@ BL_Err_Type ATTR_TCM_SECTION L1C_Set_Way_Disable(uint8_t disableVal)
 
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  Set for ROM 2T access if CPU freq >120MHz
@@ -166,6 +170,7 @@ BL_Err_Type ATTR_TCM_SECTION L1C_Set_Way_Disable(uint8_t disableVal)
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION L1C_IROM_2T_Access_Set(uint8_t enable)
 {
@@ -181,6 +186,7 @@ BL_Err_Type ATTR_TCM_SECTION L1C_IROM_2T_Access_Set(uint8_t enable)
     
     return SUCCESS;
 }
+#endif
 
 /****************************************************************************//**
  * @brief  L1C BMX init
@@ -201,6 +207,11 @@ BL_Err_Type L1C_BMX_Init(L1C_BMX_Cfg_Type *l1cBmxCfg)
     tmpVal=BL_SET_REG_BITS_VAL(tmpVal,L1C_BMX_ERR_EN,l1cBmxCfg->errEn);
     tmpVal=BL_SET_REG_BITS_VAL(tmpVal,L1C_BMX_ARB_MODE,l1cBmxCfg->arbMod);
     BL_WR_REG(L1C_BASE,L1C_CONFIG,tmpVal);
+    
+#ifndef BFLB_USE_HAL_DRIVER
+    //Interrupt_Handler_Register(L1C_BMX_ERR_IRQn,L1C_BMX_ERR_IRQHandler);
+    //Interrupt_Handler_Register(L1C_BMX_TO_IRQn,L1C_BMX_TO_IRQHandler);
+#endif
     
     return SUCCESS;
 }
@@ -343,7 +354,7 @@ BL_Err_Type L1C_BMX_ERR_INT_Callback_Install(L1C_BMX_ERR_INT_Type intType,intCal
  *
 *******************************************************************************/
 #ifndef BL602_USE_HAL_DRIVER
-void __IRQ L1C_BMX_ERR_IRQHandler(void)
+void L1C_BMX_ERR_IRQHandler(void)
 {
     L1C_BMX_ERR_INT_Type intType;
     
@@ -387,7 +398,7 @@ BL_Err_Type L1C_BMX_TIMEOUT_INT_Callback_Install(L1C_BMX_TO_INT_Type intType,int
  *
 *******************************************************************************/
 #ifndef BL602_USE_HAL_DRIVER
-void __IRQ L1C_BMX_TO_IRQHandler(void)
+void L1C_BMX_TO_IRQHandler(void)
 {
     L1C_BMX_TO_INT_Type intType;
     

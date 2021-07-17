@@ -36,13 +36,12 @@
 
 #include "string.h"
 #include "bl602_xip_sflash_ext.h"
-#include "bl602_sf_ctrl_ext.h"
 
 /** @addtogroup  BL602_Peripheral_Driver
  *  @{
  */
 
-/** @addtogroup  XIP_SFLASH_EXT
+/** @addtogroup  XIP_SFLASH
  *  @{
  */
 
@@ -61,6 +60,9 @@
 /** @defgroup  XIP_SFLASH_EXT_Private_Variables
  *  @{
  */
+
+static SPI_Flash_Cfg_Type flashCfg;
+static uint8_t aesEnable;
 
 /*@} end of group XIP_SFLASH_EXT_Private_Variables */
 
@@ -81,62 +83,147 @@
  */
 
 /****************************************************************************//**
- * @brief  XIP SFlash option save
+ * @brief  Read data from flash with lock
  *
- * @param  aesEnable: AES enable status pointer
- *
- * @return None
- *
-*******************************************************************************/
-void ATTR_TCM_SECTION XIP_SFlash_Opt_Enter(uint8_t *aesEnable)
-{
-    *aesEnable=SF_Ctrl_Is_AES_Enable();
-    if(*aesEnable){
-        SF_Ctrl_AES_Disable();
-    }
-}
-
-/****************************************************************************//**
- * @brief  XIP SFlash option restore
- *
- * @param  aesEnable: AES enable status
- *
- * @return None
- *
-*******************************************************************************/
-void ATTR_TCM_SECTION XIP_SFlash_Opt_Exit(uint8_t aesEnable)
-{
-    if(aesEnable){
-        SF_Ctrl_AES_Enable();
-    }
-}
-
-/****************************************************************************//**
- * @brief  Read data from flash via XIP
- *
- * @param  addr: addr: flash read start address
- * @param  data: data: data pointer to store data read from flash
- * @param  len: len: data length to read
+ * @param  pFlashCfg:Flash config pointer
  *
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
-BL_Err_Type ATTR_TCM_SECTION XIP_SFlash_Read_Via_Cache_Need_Lock(uint32_t addr,uint8_t *data, uint32_t len)
+__WEAK
+BL_Err_Type ATTR_TCM_SECTION XIP_SFlash_Init(SPI_Flash_Cfg_Type *pFlashCfg)
 {
-    uint32_t offset;
+    uint32_t ret;
 
-    if(addr>=BL602_FLASH_XIP_BASE && addr<BL602_FLASH_XIP_END){
-        offset=SF_Ctrl_Get_Flash_Image_Offset();
-        SF_Ctrl_Set_Flash_Image_Offset(0);
-        /* Flash read */
-        BL602_MemCpy_Fast(data,(void *)(addr),len);
-        SF_Ctrl_Set_Flash_Image_Offset(offset);
+    if(pFlashCfg==NULL){
+        /* Get flash config identify */
+        XIP_SFlash_Opt_Enter(&aesEnable);
+        ret=SF_Cfg_Flash_Identify_Ext(1,1,0,0,&flashCfg);
+        XIP_SFlash_Opt_Exit(aesEnable);
+        if((ret&BFLB_FLASH_ID_VALID_FLAG)==0){
+            return ERROR;
+        }
+    }else{
+        memcpy(&flashCfg,pFlashCfg,sizeof(flashCfg));
     }
-
+    
     return SUCCESS;
 }
 
-/*@} end of group XIP_SFLASH_EXT_Private_Functions */
+/****************************************************************************//**
+ * @brief  Read data from flash with lock
+ *
+ * @param  addr: flash read start address
+ * @param  dst: data pointer to store data read from flash
+ * @param  len: data length to read
+ *
+ * @return 0
+ *
+*******************************************************************************/
+__WEAK
+int ATTR_TCM_SECTION XIP_SFlash_Read(uint32_t addr, uint8_t *dst, int len)
+{
+    __disable_irq();
+    XIP_SFlash_Opt_Enter(&aesEnable);
+    XIP_SFlash_Read_Need_Lock(&flashCfg, addr, dst, len);
+    XIP_SFlash_Opt_Exit(aesEnable);
+    __enable_irq();
+    return 0;
+}
+
+/****************************************************************************//**
+ * @brief  Program flash one region with lock
+ *
+ * @param  addr: Start address to be programed
+ * @param  src: Data pointer to be programed
+ * @param  len: Data length to be programed
+ *
+ * @return 0
+ *
+*******************************************************************************/
+__WEAK
+int ATTR_TCM_SECTION XIP_SFlash_Write(uint32_t addr, uint8_t *src, int len)
+{
+    __disable_irq();
+    XIP_SFlash_Opt_Enter(&aesEnable);
+    XIP_SFlash_Write_Need_Lock(&flashCfg, addr, src, len);
+    XIP_SFlash_Opt_Exit(aesEnable);
+    __enable_irq();
+    return 0;
+}
+
+/****************************************************************************//**
+ * @brief  Erase flash one region with lock
+ *
+ * @param  addr: Start address to be erased
+ * @param  len: Data length to be erased
+ *
+ * @return 0
+ *
+*******************************************************************************/
+__WEAK
+int ATTR_TCM_SECTION XIP_SFlash_Erase(uint32_t addr, int len)
+{
+    __disable_irq();
+    XIP_SFlash_Opt_Enter(&aesEnable);
+    XIP_SFlash_Erase_Need_Lock(&flashCfg, addr, addr + len - 1);
+    XIP_SFlash_Opt_Exit(aesEnable);
+    __enable_irq();
+    return 0;
+}
+
+/****************************************************************************//**
+ * @brief  Sflash enable RCV mode to recovery for erase while power drop need lock
+ *
+ * @param  pFlashCfg: Flash config pointer
+ * @param  rCmd: Read RCV register cmd
+ * @param  wCmd: Write RCV register cmd
+ * @param  bitPos: RCV register bit pos
+ *
+ * @return SUCCESS or ERROR
+ *
+*******************************************************************************/
+__WEAK
+BL_Err_Type ATTR_TCM_SECTION XIP_SFlash_RCV_Enable_Need_Lock(SPI_Flash_Cfg_Type *pFlashCfg,
+    uint8_t rCmd, uint8_t wCmd, uint8_t bitPos)
+{
+    BL_Err_Type stat;
+    uint32_t offset;
+
+    stat=XIP_SFlash_State_Save(pFlashCfg,&offset);
+    if(stat!=SUCCESS){
+        SFlash_Set_IDbus_Cfg(pFlashCfg,SF_CTRL_QIO_MODE,1,0,32);
+    }else{
+        stat=SFlash_RCV_Enable(pFlashCfg, rCmd, wCmd, bitPos);
+        XIP_SFlash_State_Restore(pFlashCfg,offset);
+    }
+
+    return stat;
+}
+
+
+/****************************************************************************//**
+ * @brief  Sflash enable RCV mode to recovery for erase while power drop with lock
+ *
+ * @param  pFlashCfg: Flash config pointer
+ * @param  rCmd: Read RCV register cmd
+ * @param  wCmd: Write RCV register cmd
+ * @param  bitPos: RCV register bit pos
+ *
+ * @return 0
+ *
+*******************************************************************************/
+__WEAK
+int ATTR_TCM_SECTION XIP_SFlash_RCV_Enable_With_Lock(SPI_Flash_Cfg_Type *pFlashCfg,
+    uint8_t rCmd, uint8_t wCmd, uint8_t bitPos)
+{
+    __disable_irq();
+    XIP_SFlash_RCV_Enable_Need_Lock(pFlashCfg, rCmd, wCmd, bitPos);
+    __enable_irq();
+    return 0;
+}
+
+/*@} end of group XIP_SFLASH_EXT_Public_Functions */
 
 /*@} end of group XIP_SFLASH_EXT */
 

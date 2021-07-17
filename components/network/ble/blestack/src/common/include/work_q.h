@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 #ifndef WORK_Q_H
 #define WORK_Q_H
 #include "atomic.h"
@@ -46,6 +17,7 @@ int k_work_q_start();
 
 enum {
     K_WORK_STATE_PENDING,
+	K_WORK_STATE_PERIODIC,
 };
 struct k_work;
 /* work define*/
@@ -78,12 +50,12 @@ struct k_delayed_work {
 
 void k_delayed_work_init(struct k_delayed_work *work, k_work_handler_t handler);
 int k_delayed_work_submit(struct k_delayed_work *work, uint32_t delay);
+/* Added by bouffalolab */
+int k_delayed_work_submit_periodic(struct k_delayed_work *work, s32_t period);
 int k_delayed_work_cancel(struct k_delayed_work *work);
 s32_t k_delayed_work_remaining_get(struct k_delayed_work *work);
 void k_delayed_work_del_timer(struct k_delayed_work *work);
-
-int add_timer_record(struct k_delayed_work *delay_work);
-timer_rec_d *get_timer_record(void *hdl);
-int remv_timer_record(struct k_delayed_work *delay_work);
+/* Added by bouffalolab */
+int k_delayed_work_free(struct k_delayed_work *work);
 #endif
 #endif /* WORK_Q_H */

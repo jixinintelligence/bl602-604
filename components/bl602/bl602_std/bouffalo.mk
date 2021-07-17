@@ -31,7 +31,14 @@ COMPONENT_SRCS := bl602_std/StdDriver/Src/bl602_uart.c \
                   bl602_std/StdDriver/Src/bl602_pwm.c \
                   bl602_std/StdDriver/Src/bl602_l1c.c \
                   bl602_std/StdDriver/Src/bl602_ef_ctrl.c \
+                  bl602_std/StdDriver/Src/bl602_ef_ctrl.c \
+                  bl602_std/StdDriver/Src/bl602_mfg_efuse.c \
+                  bl602_std/StdDriver/Src/bl602_mfg_flash.c \
+                  bl602_std/StdDriver/Src/bl602_mfg_media.c \
                   bl602_std/StdDriver/Src/bl602_dac.c \
+                  bl602_std/StdDriver/Src/bl602_ir.c \
+                  bl602_std/StdDriver/Src/bl602_spi.c \
+                  bl602_std/StdDriver/Src/bl602_i2c.c \
                   bl602_std/Common/soft_crc/softcrc.c \
                   bl602_std/Common/xz/xz_crc32.c \
                   bl602_std/Common/xz/xz_dec_lzma2.c \
@@ -47,23 +54,19 @@ COMPONENT_SRCS := bl602_std/StdDriver/Src/bl602_uart.c \
                   bl602_std/Common/ring_buffer/ring_buffer.c \
                   bl602_std/RISCV/Device/Bouffalo/BL602/Startup/interrupt.c
                   
-ifeq ($(CONFIG_BL602_USE_ROM_DRIVER),1)
-COMPONENT_SRCS += bl602_std/StdDriver/Src/bl602_romapi.c \
-                  bl602_std/StdDriver/Src/bl602_sflash_ext.c \
-                  bl602_std/StdDriver/Src/bl602_xip_sflash_ext.c \
-                  bl602_std/StdDriver/Src/bl602_sf_ctrl_ext.c \
-                  bl602_std/StdDriver/Src/bl602_sf_cfg_ext.c \
-                  
-else
+ifeq ($(CONFIG_BL602_USE_ROM_DRIVER),0)
 COMPONENT_SRCS += bl602_std/StdDriver/Src/bl602_sf_ctrl.c \
-                  bl602_std/StdDriver/Src/bl602_sf_ctrl_ext.c \
                   bl602_std/StdDriver/Src/bl602_sflash.c \
                   bl602_std/StdDriver/Src/bl602_sflash_ext.c \
                   bl602_std/StdDriver/Src/bl602_xip_sflash.c \
-                  bl602_std/StdDriver/Src/bl602_xip_sflash_ext.c \
                   bl602_std/StdDriver/Src/bl602_sf_cfg.c \
                   bl602_std/StdDriver/Src/bl602_sf_cfg_ext.c \
                   
+else
+COMPONENT_SRCS += bl602_std/StdDriver/Src/bl602_romapi.c \
+                  bl602_std/StdDriver/Src/bl602_sflash_ext.c \
+                  bl602_std/StdDriver/Src/bl602_sf_cfg_ext.c \
+
 endif
 
 ifeq ($(CONFIG_BL602_USE_BSP_PARTITION),1)

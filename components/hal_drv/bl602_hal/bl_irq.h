@@ -47,10 +47,9 @@ void bl_sec_pka_IRQHandler(void);
 void bl_dma_IRQHandler(void);
 void intc_irq(void);//MAC IRQ
 void bl_irq_handler(void);//IPC host IRQ
+void bl_irq_register_with_ctx(int irqnum, void *handler, void *ctx);
 void bl_irq_register(int irqnum, void *handler);
 void bl_irq_unregister(int irqnum, void *handler);
+void bl_irq_ctx_get(int irqnum, void **ctx);
 
-//XXX we should use IRQ number for header file
-#define WIFI_IRQn (54 + 16)
-#define WIFI_IPC_PUBLIC_IRQn (63 + 16)
 #endif

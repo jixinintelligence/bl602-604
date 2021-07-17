@@ -70,6 +70,8 @@ void bl60x_fw_dump_data(void);
 void bl60x_fw_dump_statistic(int forced);
 void bl60x_current_time_us(long long *time_now);
 
+int bl60x_check_mac_status(int *is_ok);
+
 enum {
     /// Background
     API_AC_BK = 0,
@@ -88,5 +90,30 @@ int bl60x_edca_get(int ac, uint8_t *aifs, uint8_t *cwmin, uint8_t *cwmax, uint16
 /*Wi-Fi Firmware Entry*/
 void wifi_main(void *param);
 
+void bl_tpc_update_power_table(int8_t power_table_config[38]);
+void bl_tpc_update_power_table_rate(int8_t power_table[24]);
+void bl_tpc_update_power_table_channel_offset(int8_t power_table[14]);
+void bl_tpc_update_power_rate_11b(int8_t power_rate_table[4]);
+void bl_tpc_update_power_rate_11g(int8_t power_rate_table[8]);
+void bl_tpc_update_power_rate_11n(int8_t power_rate_table[8]);
+void bl_tpc_power_table_get(int8_t power_table_config[38]);
+
 void phy_cli_register(void);
+
+
+
+enum task_mm_cfg {
+    TASK_MM_CFG_KEEP_ALIVE_STATUS_ENABLED,
+    TASK_MM_CFG_KEEP_ALIVE_TIME_LAST_RECEIVED,
+    TASK_MM_CFG_KEEP_ALIVE_PACKET_COUNTER,
+};
+
+enum task_sm_cfg {
+    TASK_SM_CFG_AUTH_ASSOC_RETRY_LIMIT,
+};
+
+enum task_scan_cfg {
+    TASK_SCAN_CFG_DURATION_SCAN_PASSIVE,
+    TASK_SCAN_CFG_DURATION_SCAN_ACTIVE,
+};
 #endif /*__BL60x_FW_API_H__*/

@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 /* hci_core.h - Bluetooth HCI core access */
 
 /*
@@ -87,6 +58,11 @@ enum {
 #if defined(CONFIG_BT_STACK_PTS)
 	BT_DEV_ADV_ADDRESS_IS_PUBLIC,
 #endif
+
+#if defined(BFLB_HOST_ASSISTANT)
+    BT_DEV_ASSIST_RUN,
+#endif
+
 
 	/* Total number of flags - must be at the end of the enum */
 	BT_DEV_NUM_FLAGS,
@@ -234,16 +210,12 @@ typedef enum __packed{
 	gatt_cancel_write_req	= 0x0b,
 	att_read_by_group_type_ind = 0x0c, /* CASE : GATT/SR/GAD/BV-01-C. Indicate PTS sends a GATT discover all primary services request to iut */ 
 	att_find_by_type_value_ind = 0x0d, /* CASE : GATT/SR/GAD/BV-02-C. Indicate PTS sends a request to iut for discover it contains Primary Services by Service UUID */ 
-	att_read_by_type_ind = 0x0e /* CASE : GATT/SR/GAD/BV-04-C. Indicate PTS sends a request to iut for discover all characteristics of a specified service.*/ 
+	att_read_by_type_ind = 0x0e, /* CASE : GATT/SR/GAD/BV-04-C. Indicate PTS sends a request to iut for discover all characteristics of a specified service.*/ 
+
+	own_addr_type_random = 0x0f
 }event_id;
 
 #endif 
-
-
-#if defined(CFG_SLEEP)
-struct bt_dev* bt_get_dev_info(void);
-bool bt_stack_check_adv_state(void);
-#endif
 
 extern struct bt_dev bt_dev;
 #if defined(CONFIG_BT_SMP) || defined(CONFIG_BT_BREDR)
@@ -274,6 +246,11 @@ int bt_le_adv_start_internal(const struct bt_le_adv_param *param,
 			     const struct bt_data *ad, size_t ad_len,
 			     const struct bt_data *sd, size_t sd_len,
 			     const bt_addr_le_t *peer);
+#if defined(CONFIG_BLE_MULTI_ADV)
+int bt_le_adv_start_instant(const struct bt_le_adv_param *param,
+        const uint8_t *ad_data, size_t ad_len,
+        const uint8_t *sd_data, size_t sd_len);
+#endif
 
 #if defined (BFLB_BLE)
 
@@ -281,12 +258,29 @@ int bt_le_read_rssi(u16_t handle,int8_t *rssi);
 int set_ad_and_rsp_d(u16_t hci_op, u8_t *data, u32_t ad_len);
 int set_adv_enable(bool enable);
 int set_adv_param(const struct bt_le_adv_param *param);
-
-int bt_get_local_address(bt_addr_le_t *adv_addr);
-
+int set_adv_channel_map(u8_t channel);
+int bt_get_local_public_address(bt_addr_le_t *adv_addr);
+int bt_get_local_ramdon_address(bt_addr_le_t *adv_addr);
 int bt_le_set_data_len(struct bt_conn *conn, u16_t tx_octets, u16_t tx_time);
+int hci_le_set_phy(struct bt_conn *conn);
+int hci_le_set_default_phy(struct bt_conn *conn,u8_t default_phy);
+
 
 #if defined(CONFIG_SET_TX_PWR)
-int bt_set_tx_pwr(uint8_t mode);
+int bt_set_tx_pwr(int8_t power);
 #endif
+
+#if defined(BFLB_HOST_ASSISTANT)
+struct blhast_cb{
+    void (*le_scan_cb)(const struct bt_le_scan_param *param, bt_le_scan_cb_t cb);
+    void (*le_adv_cb)(const struct bt_le_adv_param *param, const struct bt_data *ad, 
+		size_t ad_len, const struct bt_data *sd, size_t sd_len);
+};
+int bt_set_flow_control(void);
+int bt_set_event_mask(void);
+int bt_le_set_event_mask(void);
+void bt_hci_reset_complete(struct net_buf *buf);
+void bt_register_host_assist_cb(struct blhast_cb *cb);
+#endif
+
 #endif

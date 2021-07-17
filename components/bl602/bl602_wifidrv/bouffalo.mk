@@ -9,7 +9,6 @@ COMPONENT_PRIV_INCLUDEDIRS := bl60x_wifi_driver
 ## This component's src 
 COMPONENT_SRCS := bl60x_wifi_driver/ipc_host.c \
 				  bl60x_wifi_driver/os_hal.c \
-				  bl60x_wifi_driver/bl_apis.c \
 				  bl60x_wifi_driver/bl_cmds.c \
 				  bl60x_wifi_driver/bl_irqs.c \
 				  bl60x_wifi_driver/bl_main.c \
@@ -35,12 +34,16 @@ COMPONENT_OBJS := $(patsubst %.c,%.o, $(COMPONENT_SRCS))
 
 COMPONENT_SRCDIRS := bl60x_wifi_driver
 
+CPPFLAGS += -DCFG_TXDESC="2" 
 ifeq ($(CONFIG_BL_IOT_FW_AP),1)
-CPPFLAGS += -DCFG_STA_MAX="10"
+CPPFLAGS += -DCFG_STA_MAX="3"
 else
 CPPFLAGS += -DCFG_STA_MAX="1"
 endif
 
+ifeq ($(CONFIG_BL_IOT_FW_STATISTIC),1)
+CPPFLAGS += -DCFG_BL_STATISTIC
+endif
 
 ##
 #CPPFLAGS += 

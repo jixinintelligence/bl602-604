@@ -34,14 +34,6 @@ else
 $(NAME)_DEFINES     += LWIP_ENABLED
 endif
 
-ifeq ($(CONFIG_SYSINFO_DEVICE_NAME), ESP8266)
-$(NAME)_DEFINES     += XTENSE_MALLOC_IRAM
-endif
-
-ifeq ($(CONFIG_SYSINFO_DEVICE_NAME), ESP32)
-$(NAME)_DEFINES     += CONFIG_PLAT_AOS_ESP32
-endif
-
 $(NAME)_SOURCES     := src/aes.c
 $(NAME)_SOURCES     += src/aesni.c
 $(NAME)_SOURCES     += src/arc4.c

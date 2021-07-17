@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <FreeRTOS.h>
+#include <stream_buffer.h>
 #include <task.h>
 #include <string.h>
 #include <aos/kernel.h>
@@ -25,6 +26,42 @@ const struct file_ops uart_ops =
     .sync = vfs_uart_sync,
 };
 
+static void __uart_rx_irq(void *p_arg)
+{
+    uint8_t tmp_buf[64];
+    uint32_t length = 0;
+    uart_dev_t *uart = (uart_dev_t *)p_arg;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    hal_uart_recv_II(uart, tmp_buf, sizeof(tmp_buf), &length, 0);
+    if (length) {
+        xStreamBufferSendFromISR(uart->rx_ringbuf_handle, tmp_buf,
+                length, &xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+    if (uart->poll_cb != NULL) {
+        ((struct pollfd*)uart->fd)->revents |= POLLIN;
+        ((poll_notify_t)uart->poll_cb)(uart->fd, uart->poll_data);
+    }
+}
+
+static void __uart_tx_irq(void *p_arg)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    uart_dev_t *uart = (uart_dev_t *)p_arg;
+    uint8_t ch;
+    size_t ret;
+
+    ret = xStreamBufferReceiveFromISR(uart->tx_ringbuf_handle, &ch, 1,
+                                      &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    if (ret == 1) {
+        hal_uart_send(uart, (const void *)&ch, 1, 0);
+    } else {
+        hal_uart_send_trigger_off(uart);
+    }
+}
+
 int vfs_uart_open(inode_t *inode, file_t *fp)
 {
     int ret = -1;                /* return value */
@@ -39,14 +76,15 @@ int vfs_uart_open(inode_t *inode, file_t *fp)
             uart_dev = (uart_dev_t *)(fp->node->i_arg);
 
             aos_mutex_new((aos_mutex_t*)&(uart_dev->mutex));
-
-            /*reset ring buffer*/
-            uart_dev->ring_rx_idx_read = 0;
-            uart_dev->ring_rx_idx_write = 0;
-            uart_dev->ring_tx_idx_read = 0;
-            uart_dev->ring_tx_idx_write = 0;
+            uart_dev->rx_ringbuf_handle = xStreamBufferCreate(uart_dev->rx_buf_size, 1);
+            uart_dev->tx_ringbuf_handle = xStreamBufferCreate(uart_dev->tx_buf_size, 1);
+            if (uart_dev->rx_ringbuf_handle == NULL || uart_dev->tx_ringbuf_handle == NULL) {
+                return -EINVAL;
+            }
 
             /*  init uart device. */
+            hal_uart_notify_register(uart_dev, UART_TX_INT, __uart_tx_irq);
+            hal_uart_notify_register(uart_dev, UART_RX_INT, __uart_rx_irq);
             ret = hal_uart_init(uart_dev);
         } else {
             ret = VFS_SUCCESS;
@@ -74,7 +112,8 @@ int vfs_uart_close(file_t *fp)
             if (uart_dev != NULL) {
 
                 aos_mutex_free((aos_mutex_t*)&(uart_dev->mutex));
-
+                vStreamBufferDelete(uart_dev->rx_ringbuf_handle);
+                vStreamBufferDelete(uart_dev->tx_ringbuf_handle);
                 /* turns off hardware. */
                 ret = hal_uart_finalize(uart_dev);
             } else {
@@ -92,26 +131,11 @@ int vfs_uart_close(file_t *fp)
 
 #define use_tick(now, old) ((uint32_t)(((int32_t)(now)) - ((uint32_t)(old))))
 
-static void uart_notify(void *arg)
-{
-    BaseType_t xHigherPriorityTaskWoken;
-    uart_dev_t *uart_dev = (uart_dev_t *)arg;
-    if (NULL == uart_dev) {
-        log_error("arg NULL\r\n");
-        return;
-    }
-
-    vTaskNotifyGiveFromISR((TaskHandle_t)(uart_dev->taskhdl), &xHigherPriorityTaskWoken);
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-}
-
 ssize_t vfs_uart_read(file_t *fp, void *buf, size_t nbytes)
 {
     int ret = -1;                /* return value */
     uart_dev_t *uart_dev = NULL; /* device pointer */
-    uint8_t *buffer, idx_w, idx_r;
-
-    uint8_t *readbuf = buf;
+    uint32_t timeout;
 
     /* check empty pointer. */
     if ((fp != NULL) && (fp->node != NULL)) {
@@ -120,52 +144,28 @@ ssize_t vfs_uart_read(file_t *fp, void *buf, size_t nbytes)
         uart_dev = (uart_dev_t *)(fp->node->i_arg);
 
         if ((nbytes > 0) && (uart_dev != NULL)) {
+#if defined(CFG_USB_CDC_ENABLE)
+            extern int usb_cdc_is_port_open(void);
+            extern int usb_cdc_read(uint8_t *data, uint32_t len);
+            if(usb_cdc_is_port_open()){
+                return usb_cdc_read((uint8_t *)buf, nbytes);
+            }
+#endif
+
             aos_mutex_lock((aos_mutex_t*)&(uart_dev->mutex), AOS_WAIT_FOREVER);
 
             ret = 0;
 
-            /*Protect callback from INT*/
-            taskENTER_CRITICAL();
-            //vPortEnterCritical();
-            uart_dev->taskhdl = xTaskGetCurrentTaskHandle();
-            hal_uart_notify_register(uart_dev, uart_notify);
-            taskEXIT_CRITICAL();
-            //vPortExitCritical();
+            /* block */
+            timeout = (UART_READ_CFG_BLOCK == uart_dev->read_block_flag) ? AOS_WAIT_FOREVER : 0;
 
             while (1) {
-                taskENTER_CRITICAL();
-                //vPortEnterCritical();
-                buffer = uart_dev->ring_rx_buffer;
-                idx_w = uart_dev->ring_rx_idx_write;
-                idx_r = uart_dev->ring_rx_idx_read;
-                while (ret < nbytes && (idx_r != idx_w)) {
-                    readbuf[ret] = buffer[idx_r];
-                    /*FIXME no maigc is allowed here*/
-                    idx_r = ((idx_r + 1) & 0x7F);//max idx is 127
-                    ret++;
-                }
-                uart_dev->ring_rx_idx_read = idx_r;
-                taskEXIT_CRITICAL();
-                //vPortExitCritical();
-
-                if (UART_READ_CFG_BLOCK == uart_dev->read_block_flag) {/* block */
-                    printf("block.\r\n");
-                    if (ret < nbytes) {
-                        ulTaskNotifyTake(pdFALSE, portMAX_DELAY);
-                        continue;
-                    }
-                    break;
-                } else {/* noblock */
+                ret += xStreamBufferReceive(uart_dev->rx_ringbuf_handle,
+                                            buf + ret, nbytes - ret, timeout);
+                if ((ret == nbytes) || (timeout == 0)) {
                     break;
                 }
             }
-
-            /* Protect callback from INT */
-            taskENTER_CRITICAL();
-            //vPortEnterCritical();
-            hal_uart_notify_unregister(uart_dev, NULL);
-            taskEXIT_CRITICAL();
-            //vPortExitCritical();
 
             aos_mutex_unlock((aos_mutex_t*)&(uart_dev->mutex));
         } else {
@@ -183,7 +183,6 @@ ssize_t vfs_uart_write(file_t *fp, const void *buf, size_t nbytes)
 {
     int ret = -1;                /* return value */
     uart_dev_t *uart_dev = NULL; /* device pointer */
-    uint8_t *buffer, idx_w, idx_r;
 
     /* check empty pointer. */
     if ((fp != NULL) && (fp->node != NULL)) {
@@ -192,22 +191,16 @@ ssize_t vfs_uart_write(file_t *fp, const void *buf, size_t nbytes)
         uart_dev = (uart_dev_t *)(fp->node->i_arg);
 
         if (uart_dev != NULL) {
-
-            /* send data from uart. */
-            ret = 0;
-            buffer = uart_dev->ring_tx_buffer;
-            idx_w = uart_dev->ring_tx_idx_write;
-            idx_r = uart_dev->ring_tx_idx_read;
-
-            /*FIXME no maigc is allowed here*/
-            while (ret < nbytes && ((idx_w + 1) & 0x7F) != idx_r) {
-                /*Write data to ringbuffer*/
-                buffer[idx_w] = ((uint8_t*)buf)[ret];
-                /*FIXME no maigc is allowed here*/
-                idx_w = ((idx_w + 1) & 0x7F);
-                ret++;
+#if defined(CFG_USB_CDC_ENABLE)
+            extern int usb_cdc_is_port_open(void);
+            extern int usb_cdc_write(const uint8_t *data, uint32_t len);
+            if(usb_cdc_is_port_open()){
+                return usb_cdc_write((const uint8_t *)buf, nbytes);
             }
-            uart_dev->ring_tx_idx_write = idx_w;
+#endif
+
+            ret = xStreamBufferSend(uart_dev->tx_ringbuf_handle, buf, nbytes, 0);
+
             /*Trigger UART Write Now*/
             if (ret > 0) {
                 hal_uart_send_trigger(uart_dev);
@@ -222,17 +215,6 @@ ssize_t vfs_uart_write(file_t *fp, const void *buf, size_t nbytes)
     return ret;
 }
 
-void vfs_uart_notify(void *arg)
-{
-    /*this function is called in the interrupt routine, no task is shceduled*/
-    uart_dev_t *uart_dev = (uart_dev_t*)arg;
-
-    if (uart_dev->poll_cb != NULL) {
-        ((struct pollfd*)uart_dev->fd)->revents |= POLLIN;
-        ((poll_notify_t)uart_dev->poll_cb)(uart_dev->fd, uart_dev->poll_data);
-    }
-}
-
 int vfs_uart_poll(file_t *fp, bool setup, poll_notify_t notify, struct pollfd *fd, void *opa)
 {
     uart_dev_t *uart_dev = (uart_dev_t *)(fp->node->i_arg);
@@ -244,7 +226,6 @@ int vfs_uart_poll(file_t *fp, bool setup, poll_notify_t notify, struct pollfd *f
         //vPortEnterCritical();
         uart_dev->poll_cb = NULL;
         uart_dev->poll_data = NULL;
-        hal_uart_notify_unregister(uart_dev, vfs_uart_notify);
         taskEXIT_CRITICAL();
         //vPortExitCritical();
         goto out;
@@ -255,11 +236,10 @@ int vfs_uart_poll(file_t *fp, bool setup, poll_notify_t notify, struct pollfd *f
     uart_dev->poll_cb = notify;
     uart_dev->fd = fd;
     uart_dev->poll_data = opa;
-    hal_uart_notify_register(uart_dev, vfs_uart_notify);
     taskEXIT_CRITICAL();
     //vPortExitCritical();
 
-    if (uart_dev->ring_rx_idx_read != uart_dev->ring_rx_idx_write) {
+    if (xStreamBufferIsEmpty(uart_dev->rx_ringbuf_handle) != pdTRUE) {
         ((struct pollfd*)uart_dev->fd)->revents |= POLLIN;
         (*notify)(fd, opa);
     }
@@ -272,11 +252,8 @@ out:
 int uart_ioctl_cmd_waimode(uart_dev_t *uart_dev, int cmd, unsigned long arg)
 {
     int ret = 0;
-    uint8_t *buffer, idx_w, idx_r;
+    TickType_t timeout, last_time, remain_time;
     uint32_t nbytes;
-    uint32_t start_tick;
-    uint32_t cur_tick;
-    int32_t tmp;
     uart_ioc_waitread_t *waitr_arg = (uart_ioc_waitread_t *)arg;
 
     if (NULL == waitr_arg) {
@@ -284,67 +261,27 @@ int uart_ioctl_cmd_waimode(uart_dev_t *uart_dev, int cmd, unsigned long arg)
     }
 
     nbytes = waitr_arg->read_size;
-    start_tick = xTaskGetTickCount();
 
-    /*Protect callback from INT*/
-    taskENTER_CRITICAL();
-    //vPortEnterCritical();
-    uart_dev->taskhdl = xTaskGetCurrentTaskHandle();
-    hal_uart_notify_register(uart_dev, uart_notify);
-    taskEXIT_CRITICAL();
-    //vPortExitCritical();
+    timeout = pdMS_TO_TICKS(waitr_arg->timeout);
 
     while (1) {
-        taskENTER_CRITICAL();
-        //vPortEnterCritical();
-        buffer = uart_dev->ring_rx_buffer;
-        idx_w = uart_dev->ring_rx_idx_write;
-        idx_r = uart_dev->ring_rx_idx_read;
-        while (ret < nbytes && (idx_r != idx_w)) {
-            ((uint8_t*)waitr_arg->buf)[ret] = buffer[idx_r];
-            /*FIXME no maigc is allowed here*/
-            idx_r = ((idx_r + 1) & 0x7F);//max idx is 127
-            ret++;
-        }
-        uart_dev->ring_rx_idx_read = idx_r;
-        taskEXIT_CRITICAL();
-        //vPortExitCritical();
-
-        if (0 == waitr_arg->timeout) {                        /* read noblock */
-            break;
-        } else if (AOS_WAIT_FOREVER == waitr_arg->timeout) {  /* read time forever */
-            if (IOCTL_UART_IOC_WAITRD_MODE == cmd) {
-                if (ret > 0) {
-                    break;
-                }
-            }
-            if (ret < nbytes) {
-                ulTaskNotifyTake(pdFALSE, portMAX_DELAY);
-                continue;
-            }
-            break;
-        } else {                                              /* read so time */
-            if (IOCTL_UART_IOC_WAITRD_MODE == cmd) {
-                if (ret > 0) {
-                    break;
-                }
-            }
-            cur_tick = xTaskGetTickCount();
-            tmp = ((int32_t)waitr_arg->timeout - ((int32_t)cur_tick - (int32_t)start_tick));
-            if ((0 < tmp) && (ret < nbytes)) {
-                ulTaskNotifyTake(pdFALSE, tmp);
-                continue;
-            }
+        last_time = xTaskGetTickCount();
+        ret += xStreamBufferReceive(uart_dev->rx_ringbuf_handle,
+                                    (uint8_t*)waitr_arg->buf + ret,
+                                    nbytes - ret,
+                                    timeout);
+        if ((ret == nbytes) || (timeout == 0)) {
             break;
         }
+        if (IOCTL_UART_IOC_WAITRDFULL_MODE == cmd) {
+            remain_time = xTaskGetTickCount() - last_time;
+            if (remain_time < timeout) {
+                timeout -= remain_time;
+                continue;
+            }
+        }
+        break;
     }
-
-    /* Protect callback from INT */
-    taskENTER_CRITICAL();
-    //vPortEnterCritical();
-    hal_uart_notify_unregister(uart_dev, NULL);
-    taskEXIT_CRITICAL();
-    //vPortExitCritical();
 
     return ret;
 }

@@ -1,31 +1,7 @@
 /*
- * Copyright (c) 2020 Bouffalolab.
+ * Copyright (c) 2018 Intel Corporation
  *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <errno.h>
@@ -43,7 +19,9 @@
 #include "gatt.h"
 #if defined(BFLB_BLE)
 #include <stdlib.h>
+#if defined(CONFIG_BT_SETTINGS)
 #include "easyflash.h"
+#endif
 #include <FreeRTOS.h>
 #include "portable.h"
 #endif
@@ -255,6 +233,7 @@ static void save_id(struct k_work *work)
 K_WORK_DEFINE(save_id_work, save_id);
 #endif //!BFLB_BLE
 #if defined (BFLB_BLE)
+#if defined(CONFIG_BT_SETTINGS)
 bool ef_ready_flag = false;
 int bt_check_if_ef_ready()
 {
@@ -342,23 +321,27 @@ int settings_save_one(const char *key, const u8_t *value, size_t length)
 {
     return bt_settings_set_bin(key, value, length);
 }
+#endif //CONFIG_BT_SETTINGS
 #endif
 
 void bt_settings_save_id(void)
 {
 #if defined(BFLB_BLE)
+#if defined(CONFIG_BT_SETTINGS)
     if(bt_check_if_ef_ready())
         return;
     bt_settings_set_bin(NV_LOCAL_ID_ADDR, (const u8_t *)&bt_dev.id_addr[0], sizeof(bt_addr_le_t)*CONFIG_BT_ID_MAX); 
 #if defined(CONFIG_BT_PRIVACY)
     bt_settings_set_bin(NV_LOCAL_IRK, (const u8_t *)&bt_dev.irk[0], 16*CONFIG_BT_ID_MAX); 
-#endif
+#endif //CONFIG_BT_PRIVACY
+#endif //CONFIG_BT_SETTINGS
 #else   
 	k_work_submit(&save_id_work);
 #endif
 }
 
 #if defined(BFLB_BLE)
+#if defined(CONFIG_BT_SETTINGS)
 void bt_settings_save_name(void)
 {
     if(bt_check_if_ef_ready())
@@ -385,6 +368,7 @@ void bt_local_info_load(void)
     bt_settings_get_bin(NV_LOCAL_IRK, (u8_t *)&bt_dev.irk[0][0], 16*CONFIG_BT_ID_MAX, NULL);
 #endif
 }
+#endif //CONFIG_BT_SETTINGS
 #endif
 
 #if !defined(BFLB_BLE)

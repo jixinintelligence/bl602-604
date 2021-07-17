@@ -18,12 +18,12 @@ $(info ****** Please SET BL60X_SDK_PATH ******)
 $(info ****** Trying SDK PATH [$(BL60X_SDK_PATH)])
 endif
 
-COMPONENTS_NETWORK := sntp
-COMPONENTS_BLSYS   := bltime blfdt blmtd blota bloop looprt loopset
+COMPONENTS_NETWORK := sntp dns_server
+COMPONENTS_BLSYS   := bltime blfdt blmtd blota bloop loopadc looprt loopset
 COMPONENTS_VFS     := romfs
 COMPONENTS_BLE     := blecontroller blestack
 
-INCLUDE_COMPONENTS += freertos_riscv_ram bl602 bl602_std bl602_wifi bl602_wifidrv hal_drv lwip lwip_dhcpd mbedtls vfs yloop utils cli aws-iot httpc netutils blog blog_testc blsync_ble
+INCLUDE_COMPONENTS += freertos_riscv_ram bl602 bl602_std bl602_wifi bl602_wifidrv hal_drv lwip lwip_dhcpd mbedtls vfs yloop utils cli aws-iot httpc netutils blog blog_testc blsync_ble cjson
 INCLUDE_COMPONENTS += easyflash4
 INCLUDE_COMPONENTS += $(COMPONENTS_NETWORK)
 INCLUDE_COMPONENTS += $(COMPONENTS_BLSYS)

@@ -180,7 +180,7 @@ void ATTR_TCM_SECTION BLSP_Boot2_Jump_Entry(void)
         
     /*Note:enable cache with flash offset, after this, should be no flash directl read,
       If need read, should take flash offset into consideration */
-    if(0!=efuseCfg.encrypted){
+    if(0!=efuseCfg.encrypted[0]){
         /*for encrypted img, use none-continuos read*/
         ret=BLSP_Boot2_Set_Cache(0,&flashCfg,&bootImgCfg[0]);
     }else{
@@ -192,7 +192,7 @@ void ATTR_TCM_SECTION BLSP_Boot2_Jump_Entry(void)
     }
     
     /* Set decryption before read MSP and PC*/
-    if(0!=efuseCfg.encrypted){
+    if(0!=efuseCfg.encrypted[0]){
         BLSP_Boot2_Set_Encrypt(0,&bootImgCfg[0]);
         BLSP_Boot2_Set_Encrypt(1,&bootImgCfg[1]);
         /* Get msp and pc value */

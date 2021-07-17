@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 #ifndef BL_PORT_H
 #define BL_PORT_H
 #include "config.h"
@@ -36,11 +7,12 @@
 #include <stdint.h>
 #include <string.h>
 #include "types.h"
+#include "bl_port.h"
 
-#define UINT_MAX 0xffffffff
+#define BT_UINT_MAX        0xffffffff
 #define BL_WAIT_FOREVER    0xffffffffu
 #define BL_NO_WAIT         0x0
-#define ms2tick(ms) (((ms)+portTICK_PERIOD_MS-1)/portTICK_PERIOD_MS)
+#define ms2tick            pdMS_TO_TICKS
 
 typedef struct {
     void *hdl;
@@ -84,7 +56,7 @@ struct k_queue {
 #define _K_QUEUE_INITIALIZER(obj) { 0 }
 #define K_QUEUE_INITIALIZER DEPRECATED_MACRO _K_QUEUE_INITIALIZER
 
-void k_queue_init(struct k_queue *queue);
+void k_queue_init(struct k_queue *queue, int size);
 void k_queue_free(struct k_queue *queue);
 void k_queue_append(struct k_queue *queue, void *data);
 void k_queue_prepend(struct k_queue *queue, void *data);
@@ -92,6 +64,7 @@ void k_queue_insert(struct k_queue *queue, void *prev, void *data);
 void k_queue_append_list(struct k_queue *queue, void *head, void *tail);
 void *k_queue_get(struct k_queue *queue, s32_t timeout);
 int k_queue_is_empty(struct k_queue *queue);
+int k_queue_get_cnt(struct k_queue *queue);
 
 struct k_lifo {
     struct k_queue _queue;
@@ -104,8 +77,8 @@ struct k_lifo {
 
 #define K_LIFO_INITIALIZER DEPRECATED_MACRO _K_LIFO_INITIALIZER
 
-#define k_lifo_init(lifo) \
-        k_queue_init((struct k_queue *) lifo)
+#define k_lifo_init(lifo, size) \
+        k_queue_init((struct k_queue *) lifo, size)
 
 #define k_lifo_put(lifo, data) \
         k_queue_prepend((struct k_queue *) lifo, data)
@@ -128,8 +101,8 @@ struct k_fifo {
         }
 #define K_FIFO_INITIALIZER DEPRECATED_MACRO _K_FIFO_INITIALIZER
 
-#define k_fifo_init(fifo) \
-        k_queue_init((struct k_queue *) fifo)
+#define k_fifo_init(fifo, size) \
+        k_queue_init((struct k_queue *) fifo, size)
 
 #define k_fifo_put(fifo, data) \
         k_queue_append((struct k_queue *) fifo, data)
@@ -199,11 +172,15 @@ typedef struct k_timer {
  */
 void k_timer_init(k_timer_t *timer, k_timer_handler_t handle, void *args);
 
+void* k_timer_get_id(void* hdl);
+
 /**
  * @brief Start a timer.
  *
  */
 void k_timer_start(k_timer_t *timer, uint32_t timeout);
+
+void k_timer_reset(k_timer_t *timer);
 
 /**
  * @brief Stop a timer.
@@ -255,6 +232,7 @@ int k_thread_create(struct k_thread *new_thread, const char *name,
                     size_t stack_size, k_thread_entry_t entry,
                     int prio);
                
+void k_thread_delete(struct k_thread *new_thread);
 
 /**
  * @brief Yield the current thread.
@@ -281,5 +259,8 @@ int k_is_in_isr(void);
 
 #define BIT(n)  (1UL << (n))
 long long k_now_ms(void);
+void k_get_random_byte_array(uint8_t *buf, size_t len);
+void *k_malloc(size_t size);
+void k_free(void *buf);
 #endif /* BL_PORT_H */
 

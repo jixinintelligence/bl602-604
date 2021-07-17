@@ -5,6 +5,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+#ifndef __ADV_H__
+#define __ADV_H__
 
 /* Maximum advertising data payload for a single data type */
 #define BT_MESH_ADV_DATA_SIZE 29
@@ -31,16 +33,11 @@ struct bt_mesh_adv {
 	u8_t      type:2,
 		  busy:1;
 	u8_t      xmit;
-
-	union {
-		/* Address, used e.g. for Friend Queue messages */
-		u16_t addr;
-
-		/* For transport layer segment sending */
-		struct {
-			u8_t attempts;
-		} seg;
-	};
+    #if defined(CONFIG_BLE_MULTI_ADV)
+    struct k_delayed_work	d_work;
+    int adv_id;
+    struct net_buf* buf;
+    #endif /* CONFIG_BLE_MULTI_ADV */
 };
 
 typedef struct bt_mesh_adv *(*bt_mesh_adv_alloc_t)(int id);
@@ -64,3 +61,5 @@ void bt_mesh_adv_init(void);
 int bt_mesh_scan_enable(void);
 
 int bt_mesh_scan_disable(void);
+
+#endif /*__ADV_H__*/

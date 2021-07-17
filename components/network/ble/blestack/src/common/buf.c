@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 /* buf.c - Buffer management */
 
 /*
@@ -50,6 +21,9 @@
 #include <string.h>
 #include <misc/byteorder.h>
 #include <net/buf.h>
+#if defined(BFLB_DYNAMIC_ALLOC_MEM)
+#include "bl_port.h"
+#endif
 
 #if defined(CONFIG_NET_BUF_LOG)
 #define NET_BUF_DBG(fmt, ...) LOG_DBG("(%p) " fmt, k_current_get(), \
@@ -76,23 +50,107 @@
 #define WARN_ALLOC_INTERVAL K_FOREVER
 #endif
 
-#if defined(BFLB_BLE_DISABLE_STATIC_BUF)
+#if defined(BFLB_DYNAMIC_ALLOC_MEM)
 extern struct net_buf_pool hci_cmd_pool;
 extern struct net_buf_pool hci_rx_pool;
+#if defined(CONFIG_BT_CONN)
 extern struct net_buf_pool acl_tx_pool;
+extern struct net_buf_pool num_complete_pool;
+#if CONFIG_BT_ATT_PREPARE_COUNT > 0
+extern struct net_buf_pool prep_pool;
+#endif
+#if defined(CONFIG_BT_HCI_ACL_FLOW_CONTROL)
+extern struct net_buf_pool acl_in_pool;
+#endif
+#if CONFIG_BT_ATT_PREPARE_COUNT > 0
+extern struct net_buf_pool frag_pool;
+#endif
+#endif //CONFIG_BT_CONN
+#if defined(CONFIG_BT_DISCARDABLE_BUF_COUNT)
+extern struct net_buf_pool discardable_pool;
+#endif
 #ifdef CONFIG_BT_MESH
 extern struct net_buf_pool adv_buf_pool;
-struct net_buf_pool *_net_buf_pool_list[] = {&hci_cmd_pool, &hci_rx_pool, &acl_tx_pool, &adv_buf_pool};
-#else
-struct net_buf_pool *_net_buf_pool_list[] = {&hci_cmd_pool, &hci_rx_pool, &acl_tx_pool};
+extern struct net_buf_pool loopback_buf_pool;
+#if defined(CONFIG_BT_MESH_FRIEND)
+extern struct net_buf_pool friend_buf_pool;
+#endif //CONFIG_BT_MESH_FRIEND
 #endif
-#else
+#if defined(CONFIG_BT_BREDR)
+extern struct net_buf_pool br_sig_pool;
+extern struct net_buf_pool sdp_pool;
+extern struct net_buf_pool hf_pool;
+#endif
+struct net_buf_pool *_net_buf_pool_list[] = {
+    &hci_cmd_pool,
+    &hci_rx_pool,
+    #if defined(CONFIG_BT_CONN)
+    &acl_tx_pool,
+    &num_complete_pool,
+    #if CONFIG_BT_ATT_PREPARE_COUNT > 0
+    &prep_pool,
+    #endif
+    #if defined(CONFIG_BT_HCI_ACL_FLOW_CONTROL)
+    &acl_in_pool,
+    #endif
+    #if CONFIG_BT_L2CAP_TX_FRAG_COUNT > 0
+    &frag_pool,
+    #endif
+    #endif//defined(CONFIG_BT_CONN)
+    #if defined(CONFIG_BT_DISCARDABLE_BUF_COUNT)
+    discardable_pool,
+    #endif
+    #ifdef CONFIG_BT_MESH
+    &adv_buf_pool,
+    &loopback_buf_pool,
+    #if defined(CONFIG_BT_MESH_FRIEND)
+    &friend_buf_pool,
+    #endif
+    #endif
+    #if defined(CONFIG_BT_BREDR)
+    &br_sig_pool,
+    &sdp_pool,
+    &hf_pool,
+    #endif
+};
+#else //defined(BFLB_DYNAMIC_ALLOC_MEM)
 extern struct net_buf_pool _net_buf_pool_list[];
 #endif //BFLB_BLE
 
+#if defined(BFLB_DYNAMIC_ALLOC_MEM)
+void net_buf_init(struct net_buf_pool *buf_pool, u16_t buf_count, size_t data_size, destroy_cb_t destroy)
+{
+    struct net_buf_pool_fixed *buf_fixed;
+    buf_pool->alloc = (struct net_buf_data_alloc *)k_malloc(sizeof(void *));
+    buf_pool->alloc->alloc_data = (struct net_buf_pool_fixed *)k_malloc(sizeof(void *));
+    
+    buf_fixed = (struct net_buf_pool_fixed *)buf_pool->alloc->alloc_data;
+    
+    buf_pool->alloc->cb = &net_buf_fixed_cb;
+    buf_fixed->data_size = data_size;
+    buf_fixed->data_pool = (u8_t *)k_malloc(buf_count * data_size);
+    buf_pool->__bufs = (struct net_buf *)k_malloc(buf_count * sizeof(struct net_buf));
+    buf_pool->buf_count = buf_count;
+    buf_pool->uninit_count = buf_count;
+    #if defined(CONFIG_NET_BUF_POOL_USAGE)
+    buf_pool->avail_count = buf_count;
+    #endif
+    buf_pool->destroy = destroy;  
+}
+
+void net_buf_deinit(struct net_buf_pool *buf_pool)
+{
+    struct net_buf_pool_fixed *buf_fixed = (struct net_buf_pool_fixed *)buf_pool->alloc->alloc_data;
+    k_free(buf_fixed->data_pool);
+    k_free(buf_pool->__bufs);
+    k_free(buf_pool->alloc->alloc_data);
+    k_free(buf_pool->alloc);
+}
+#endif
+
 struct net_buf_pool *net_buf_pool_get(int id)
 {
-#if defined(BFLB_BLE_DISABLE_STATIC_BUF)
+#if defined(BFLB_DYNAMIC_ALLOC_MEM)
     return _net_buf_pool_list[id];
 #else
 	return &_net_buf_pool_list[id];
@@ -101,7 +159,7 @@ struct net_buf_pool *net_buf_pool_get(int id)
 
 static int pool_id(struct net_buf_pool *pool)
 {
-#if defined(BFLB_BLE_DISABLE_STATIC_BUF)
+#if defined(BFLB_DYNAMIC_ALLOC_MEM)
     int index;
 
     for (index = 0; index < (sizeof(_net_buf_pool_list) / 4); index++) {
@@ -488,6 +546,15 @@ struct net_buf *net_buf_get(struct k_fifo *fifo, s32_t timeout)
 	return buf;
 }
 
+void net_buf_simple_init_with_data(struct net_buf_simple *buf,
+				   void *data, size_t size)
+{
+	buf->__buf = data;
+	buf->data  = data;
+	buf->size  = size;
+	buf->len   = size;
+}
+
 void net_buf_simple_reserve(struct net_buf_simple *buf, size_t reserve)
 {
 	NET_BUF_ASSERT(buf);
@@ -561,6 +628,11 @@ void net_buf_put(struct k_fifo *fifo, struct net_buf *buf)
 	k_fifo_put_list(fifo, buf, tail);
 }
 
+#if defined(OPTIMIZE_DATA_EVT_FLOW_FROM_CONTROLLER)
+extern struct net_buf_pool hci_rx_pool;
+extern void bl_handle_queued_msg(void);
+#endif
+
 #if defined(CONFIG_NET_BUF_LOG)
 void net_buf_unref_debug(struct net_buf *buf, const char *func, int line)
 #else
@@ -572,6 +644,10 @@ void net_buf_unref(struct net_buf *buf)
 	while (buf) {
 		struct net_buf *frags = buf->frags;
 		struct net_buf_pool *pool;
+#if defined(OPTIMIZE_DATA_EVT_FLOW_FROM_CONTROLLER)
+        u8_t buf_type = bt_buf_get_type(buf);
+		bool adv_report = bt_buf_check_rx_adv(buf);
+#endif
 
 #if defined(CONFIG_NET_BUF_LOG)
 		if (!buf->ref) {
@@ -583,9 +659,12 @@ void net_buf_unref(struct net_buf *buf)
 		NET_BUF_DBG("buf %p ref %u pool_id %u frags %p", buf, buf->ref,
 			    buf->pool_id, buf->frags);
 
+		unsigned int key = irq_lock();/* Added by bouffalo lab, to protect ref decrease */
 		if (--buf->ref > 0) {
+			irq_unlock(key);/* Added by bouffalo lab */
 			return;
 		}
+		irq_unlock(key);/* Added by bouffalo lab */
 
 		if (buf->__buf) {
 			data_unref(buf, buf->__buf);
@@ -595,7 +674,7 @@ void net_buf_unref(struct net_buf *buf)
 		buf->data = NULL;
 		buf->frags = NULL;
 
-		pool = net_buf_pool_get(buf->pool_id);
+		pool = net_buf_pool_get(buf->pool_id); 
 
 #if defined(CONFIG_NET_BUF_POOL_USAGE)
 		pool->avail_count++;
@@ -609,6 +688,13 @@ void net_buf_unref(struct net_buf *buf)
 		}
 
 		buf = frags;
+
+        #if defined(OPTIMIZE_DATA_EVT_FLOW_FROM_CONTROLLER)
+        if(pool == &hci_rx_pool && (buf_type == BT_BUF_ACL_IN || adv_report == true)){
+            bl_handle_queued_msg();
+            return;
+        }
+        #endif  
 	}
 }
 
@@ -618,7 +704,10 @@ struct net_buf *net_buf_ref(struct net_buf *buf)
 
 	NET_BUF_DBG("buf %p (old) ref %u pool_id %u",
 		    buf, buf->ref, buf->pool_id);
+
+	unsigned int key = irq_lock();/* Added by bouffalo lab,  to protect ref increase */
 	buf->ref++;
+	irq_unlock(key);/* Added by bouffalo lab */
 	return buf;
 }
 
@@ -873,6 +962,20 @@ void net_buf_simple_add_be16(struct net_buf_simple *buf, u16_t val)
 	sys_put_be16(val, net_buf_simple_add(buf, sizeof(val)));
 }
 
+void net_buf_simple_add_le24(struct net_buf_simple *buf, uint32_t val)
+{
+	NET_BUF_SIMPLE_DBG("buf %p val %u", buf, val);
+
+	sys_put_le24(val, net_buf_simple_add(buf, 3));
+}
+
+void net_buf_simple_add_be24(struct net_buf_simple *buf, uint32_t val)
+{
+	NET_BUF_SIMPLE_DBG("buf %p val %u", buf, val);
+
+	sys_put_be24(val, net_buf_simple_add(buf, 3));
+}
+
 void net_buf_simple_add_le32(struct net_buf_simple *buf, u32_t val)
 {
 	NET_BUF_SIMPLE_DBG("buf %p val %u", buf, val);
@@ -917,6 +1020,20 @@ void net_buf_simple_push_u8(struct net_buf_simple *buf, u8_t val)
 	u8_t *data = net_buf_simple_push(buf, 1);
 
 	*data = val;
+}
+
+void net_buf_simple_push_le24(struct net_buf_simple *buf, uint32_t val)
+{
+	NET_BUF_SIMPLE_DBG("buf %p val %u", buf, val);
+
+	sys_put_le24(val, net_buf_simple_push(buf, 3));
+}
+
+void net_buf_simple_push_be24(struct net_buf_simple *buf, uint32_t val)
+{
+	NET_BUF_SIMPLE_DBG("buf %p val %u", buf, val);
+
+	sys_put_be24(val, net_buf_simple_push(buf, 3));
 }
 
 void *net_buf_simple_pull(struct net_buf_simple *buf, size_t len)

@@ -13,8 +13,17 @@
 #include <blog.h>
 #include <stdio.h>
 #include "cJSON.h"
+#include "hci_core.h"
+
+#if defined(CONFIG_BT_MESH_SYNC)
+#include "include/mesh.h"
+#include "transport.h"
+#endif
 
 static bl_ble_sync_t *gp_index = NULL;
+struct bt_conn *blsync_conn = NULL;
+struct bt_gatt_exchange_params blsync_exchg_mtu;
+static unsigned int isRegister = 0;
 
 static void wifiprov_ccc_cfg_changed(const struct bt_gatt_attr *attr,u16_t value);
 
@@ -25,6 +34,47 @@ static ssize_t write_data(struct bt_conn *conn,
 static ssize_t read_data(struct bt_conn *conn,
                          const struct bt_gatt_attr *attr, void *buf,
                          u16_t len, u16_t offset);
+
+
+static void blsync_exchange_func(struct bt_conn *conn, u8_t err,
+			  struct bt_gatt_exchange_params *params)
+{
+	printf("Exchange %s\r\n", err == 0U ? "successful" : "failed");
+}
+
+static void blsync_disconnected(struct bt_conn *conn, u8_t reason)
+{ 
+	printf("disconnected (reason %u)\r\n",reason);
+	blsync_conn = NULL;
+}
+
+static void blsync_connected(struct bt_conn *conn, u8_t err)
+{
+	int tx_octets = 0x00fb;
+	int tx_time = 0x0848;
+	int ret = -1;
+
+	printf("%s\n",__func__);
+	blsync_conn = conn;
+
+	//set data length after connected.
+	ret = bt_le_set_data_len(blsync_conn, tx_octets, tx_time);
+	if(!ret){
+		printf("Set data length success.\n");
+	}
+	else{
+		printf("Set data length failure, err: %d\n", ret);
+	}
+
+	//exchange mtu size after connected.
+	blsync_exchg_mtu.func = blsync_exchange_func;
+	ret = bt_gatt_exchange_mtu(blsync_conn, &blsync_exchg_mtu);
+	if (!ret) {
+		printf("Exchange mtu size pending.\n");
+	} else {
+		printf("Exchange mtu size failure, err: %d\n", ret);
+	}
+}                        
 
 static void scan_complete_cb(void *param)
 {
@@ -42,10 +92,7 @@ static void scan_complete_cb(void *param)
 static void wifi_state_get_cb(void *p_arg)
 {
     struct wifi_state *p_state = (struct wifi_state *)p_arg;
-    gp_index->state.state = p_state->state;
-    strcpy(gp_index->state.ip, p_state->ip);
-    strcpy(gp_index->state.mask, p_state->mask);
-    strcpy(gp_index->state.gw, p_state->gw);
+    gp_index->state = *p_state;
     xSemaphoreGive(gp_index->xSemaphore);
 }
 
@@ -124,12 +171,28 @@ static int __recv_event(void *p_drv, struct pro_event *p_event)
             break;
         case DATA_STA_WIFI_SSID:
             memset(gp_index->conn_info.ssid, 0, sizeof(gp_index->conn_info.ssid));
+            gp_index->conn_info.ssid_tail[0] = 0;
             memcpy(gp_index->conn_info.ssid, p_event->p_buf, p_event->length);
             break;
         case DATA_STA_WIFI_PASSWORD:
             memset(gp_index->conn_info.pask, 0, sizeof(gp_index->conn_info.pask));
             memcpy(gp_index->conn_info.pask, p_event->p_buf, p_event->length);
             break;
+#if defined(CONFIG_ZIGBEE_PROV)
+        case DATA_ZB_LINKKEY:
+            memset(gp_index->zb_info.linkkey, 0, sizeof(gp_index->zb_info.linkkey));
+            memcpy(gp_index->zb_info.linkkey, p_event->p_buf, p_event->length);
+            gp_index->zb_func->zb_setlinkkey(gp_index->zb_info.linkkey);
+            break;
+        case DATA_ZB_PANID:
+
+        break;
+
+        case DATA_ZB_INSTALLCODE:
+
+        break;
+
+#endif
         default:
             return PRO_ERROR;
         }
@@ -205,11 +268,20 @@ static int __recv_event(void *p_drv, struct pro_event *p_event)
                                      (TickType_t)PRO_CONFIG_TIMEOUT) != pdTRUE) {
                       return PRO_ERROR;
                   }
+                  sprintf(bssid, "%02X:%02X:%02X:%02X:%02X:%02X",
+                          gp_index->state.bssid[0],
+                          gp_index->state.bssid[1],
+                          gp_index->state.bssid[2],
+                          gp_index->state.bssid[3],
+                          gp_index->state.bssid[4],
+                          gp_index->state.bssid[5]);
                   p_root = cJSON_CreateObject();
                   cJSON_AddNumberToObject(p_root, "state", gp_index->state.state);
                   cJSON_AddStringToObject(p_root, "ip", gp_index->state.ip);
                   cJSON_AddStringToObject(p_root, "gw", gp_index->state.gw);
                   cJSON_AddStringToObject(p_root, "mask", gp_index->state.mask);
+                  cJSON_AddStringToObject(p_root, "ssid", gp_index->state.ssid);
+                  cJSON_AddStringToObject(p_root, "bssid", bssid);
                   json_str = cJSON_Print(p_root);
 
                   pro_trans_layer_ack_read(gp_index->pro_handle, json_str, strlen(json_str));
@@ -222,9 +294,22 @@ static int __recv_event(void *p_drv, struct pro_event *p_event)
                                        BLSYNC_BLE_VERSION,
                                        sizeof(BLSYNC_BLE_VERSION));
               break;
-          default:
-              return PRO_ERROR;
-          }
+#if defined(CONFIG_ZIGBEE_PROV)
+          case CMD_ZB_SCAN:
+
+              break;
+          case CMD_ZB_GET_INSTALLCODE:
+
+              break;
+          case CMD_ZB_RESET:
+              if(gp_index->zb_func->zb_reset) {
+                 gp_index->zb_func->zb_reset();
+              }
+              break;
+#endif
+        default:
+            return PRO_ERROR;
+        }
     }
 
     return PRO_OK;
@@ -264,7 +349,15 @@ static void __bl_ble_sync_task (void *p_arg)
             if (index->p_cur_conn) {
                 protocol_mtu = bt_gatt_get_mtu(index->p_cur_conn) - 3;
             }
-
+			#if defined(CONFIG_BT_MESH_SYNC) 
+            if(protocol_mtu){
+                protocol_mtu = protocol_mtu > BT_MESH_TX_VND_SDU_MAX_SHORT ? 
+							BT_MESH_TX_VND_SDU_MAX_SHORT:protocol_mtu;
+            }
+            else{
+                protocol_mtu = BT_MESH_TX_VND_SDU_MAX_SHORT;
+            }
+			#endif
             if (pro_trans_read(index->pro_handle, recv_buf.buf,
                                recv_buf.len, protocol_mtu) != PRO_OK) {
                 blog_info("protocol analyze failed\r\n");
@@ -299,6 +392,11 @@ static struct bt_gatt_attr attrs[]= {
 
 const static struct bt_gatt_service wifiprov_server = BT_GATT_SERVICE(attrs);
 
+static struct bt_conn_cb blsync_conn_callbacks = {
+	.connected	=   blsync_connected,
+	.disconnected	=   blsync_disconnected,
+};
+
 int bl_ble_sync_start(bl_ble_sync_t *index,
                        struct blesync_wifi_func *func,
                        pfn_complete_cb_t cb,
@@ -317,7 +415,11 @@ int bl_ble_sync_start(bl_ble_sync_t *index,
     gp_index->scaning = 0;
     index->task_runing = 0;
     index->stop_flag = 0;
-
+    if ( !isRegister )
+    {
+        isRegister = 1;
+        bt_conn_cb_register(&blsync_conn_callbacks);
+    }
     bt_gatt_service_register((struct bt_gatt_service *)&wifiprov_server);
 
     index->task_handle = xTaskCreateStatic(__bl_ble_sync_task,
@@ -351,4 +453,199 @@ int bl_ble_sync_stop(bl_ble_sync_t *index)
     }
     return 0;
 }
+
+#if defined(CONFIG_ZIGBEE_PROV)
+int bl_blezb_sync_start(bl_ble_sync_t *index,
+                                struct blesync_zb_func *func,
+                                 pfn_complete_cb_t cb,
+                                void *cb_arg)
+{
+    if (index == NULL || func == NULL) {
+        blog_info("ble sync init failed\r\n");
+        return -1;
+    }
+
+    memset(index, 0, sizeof(bl_ble_sync_t));
+    gp_index = index;
+    index->zb_func = func;
+    index->complete_cb = cb;
+    index->p_arg = cb_arg;
+    gp_index->scaning = 0;
+    index->task_runing = 0;
+    index->stop_flag = 0;
+    if ( !isRegister )
+    {
+        isRegister = 1;
+        bt_conn_cb_register(&blsync_conn_callbacks);
+    }
+    bt_gatt_service_register((struct bt_gatt_service *)&wifiprov_server);
+
+    index->task_handle = xTaskCreateStatic(__bl_ble_sync_task,
+                                    (char*)"pro",
+                                    BLE_PROV_TASK_STACK_SIZE,
+                                    index,
+                                    10,
+                                    index->stack,
+                                    &index->task);
+    return 0;
+
+}
+int bl_blezb_sync_stop(bl_ble_sync_t *index)
+{
+    if (index == NULL) {
+		return -1;
+	}
+
+	index->stop_flag = 1;
+
+	if (xTaskGetCurrentTaskHandle() == gp_index->task_handle) {
+		while(gp_index->scaning == 1) {
+			vTaskDelay(10);
+		}
+		vTaskDelete(index->task_handle);
+	} else {
+		while((gp_index->scaning == 1) || (index->task_runing == 1)) {
+			vTaskDelay(10);
+		}
+	}
+	return 0;
+
+
+
+}
+#endif
+
+
+#if defined(CONFIG_BT_MESH_SYNC)
+static void vnd_sync_get(struct bt_mesh_model *model,
+                struct bt_mesh_msg_ctx *ctx,
+                struct net_buf_simple *buf)
+{
+	blog_info_hexdump("vnd_sync_get \n", buf->data, buf->len);
+#if 1
+	if (!gp_index || gp_index->rbuf_len == 0) {
+		blog_info("bl_blemesh_sync_start not call or len is zero\n");
+		return ;
+	}
+
+	blog_info("read length %d\r\n", gp_index->rbuf_len);
+	pro_trans_ack(gp_index->pro_handle);
+
+	NET_BUF_SIMPLE_DEFINE(msg, BT_MESH_TX_SDU_MAX);
+	bt_mesh_model_msg_init(&msg, BLE_MESH_MODEL_VND_OP_SYC_STATUS);
+	
+	if(gp_index->rbuf_len < BT_MESH_TX_VND_SDU_MAX_SHORT){
+		net_buf_simple_add_mem(&msg, gp_index->attr_read_buf, gp_index->rbuf_len);
+		gp_index->rbuf_len = 0;
+	}
+	else{
+		net_buf_simple_add_mem(&msg, gp_index->attr_read_buf, BT_MESH_TX_VND_SDU_MAX_SHORT);
+		gp_index->rbuf_len -= BT_MESH_TX_VND_SDU_MAX_SHORT;
+	}
+
+	bt_mesh_model_send(model, ctx, &msg, NULL, NULL);
+	return;
+#else
+	/* For data transition test */
+	NET_BUF_SIMPLE_DEFINE(msg, BT_MESH_TX_SDU_MAX);
+
+	bt_mesh_model_msg_init(&msg, BLE_MESH_MODEL_VND_OP_SYC_STATUS);
+	net_buf_simple_add_mem(&msg, buf->data, buf->len);
+
+	bt_mesh_model_send(model, ctx, &msg, NULL, NULL);
+#endif
+	return;
+}
+
+static void vnd_sync_set(struct bt_mesh_model *model,
+                struct bt_mesh_msg_ctx *ctx,
+                struct net_buf_simple *buf)
+{
+	blog_info_hexdump("vnd_sync_set \n", buf->data, buf->len);
+#if 1
+	if(!gp_index){
+		blog_info("bl_blemesh_sync_start not call\n");
+		return;
+	}
+	//gp_index->p_cur_conn = conn;
+
+	blog_info("write length %d\r\n", buf->len);
+	blog_info_hexdump("data", buf->data, buf->len);
+
+	gp_index->send_buf.len = buf->len;
+	memcpy(gp_index->send_buf.buf, buf->data, buf->len);
+	xQueueSend(gp_index->xQueue1, &gp_index->send_buf, 0);
+#else
+	/* For data transition test */
+	if (ctx->recv_op == BLE_MESH_MODEL_VND_OP_SYC_SET_UNACK) {
+		blog_info("Set unack");
+		return;
+	}
+	blog_info("Send status");
+	NET_BUF_SIMPLE_DEFINE(msg, BT_MESH_TX_SDU_MAX);
+
+	bt_mesh_model_msg_init(&msg, BLE_MESH_MODEL_VND_OP_SYC_STATUS);
+	net_buf_simple_add_mem(&msg, buf->data, buf->len);
+
+	bt_mesh_model_send(model, ctx, &msg, NULL, NULL);
+
+	return;
+#endif
+}
+
+/* Mapping of message handlers for Vendor sync Server (0x0001) */
+const struct bt_mesh_model_op vnd_sync_op[4] = {
+	{ BLE_MESH_MODEL_VND_OP_SYC_GET,       0, vnd_sync_get },
+	{ BLE_MESH_MODEL_VND_OP_SYC_SET,       1, vnd_sync_set },
+	{ BLE_MESH_MODEL_VND_OP_SYC_SET_UNACK, 1, vnd_sync_set },
+	BT_MESH_MODEL_OP_END,
+};
+
+int bl_blemesh_sync_start(bl_ble_sync_t *index,
+                       struct blesync_wifi_func *func,
+                       pfn_complete_cb_t cb,
+                       void *cb_arg)
+{
+	if (index == NULL || func == NULL) {
+		blog_info("ble sync init failed\r\n");
+		return -1;
+	}
+
+	memset(index, 0, sizeof(bl_ble_sync_t));
+	gp_index = index;
+	index->wifi_func = func;
+	index->complete_cb = cb;
+	index->p_arg = cb_arg;
+	gp_index->scaning = 0;
+	index->task_runing = 0;
+	index->stop_flag = 0;
+
+	index->task_handle = xTaskCreateStatic(__bl_ble_sync_task, (char*)"pro",
+							BLE_PROV_TASK_STACK_SIZE, index, 10,
+							index->stack, &index->task);
+	return 0;
+}
+
+int bl_blemesh_sync_stop(bl_ble_sync_t *index)
+{
+	if (index == NULL) {
+		return -1;
+	}
+
+	index->stop_flag = 1;
+
+	if (xTaskGetCurrentTaskHandle() == gp_index->task_handle) {
+		while(gp_index->scaning == 1) {
+			vTaskDelay(10);
+		}
+		vTaskDelete(index->task_handle);
+	} else {
+		while((gp_index->scaning == 1) || (index->task_runing == 1)) {
+			vTaskDelay(10);
+		}
+	}
+	return 0;
+}
+
+#endif /* CONFIG_BT_MESH_SYNC */
 

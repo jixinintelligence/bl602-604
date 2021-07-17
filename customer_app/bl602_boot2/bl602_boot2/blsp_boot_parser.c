@@ -354,6 +354,7 @@ int32_t BLSP_Boot_Parse_AesIv(Boot_Image_Config *bootImgCfg,uint8_t *data)
 int32_t BLSP_Boot_Parser_Check_Signature(Boot_Image_Config *bootImgCfg)
 {
     int32_t ret=0;
+    uint64_t startTime=0;
     
     MSG_DBG("%d,%d\r\n",psMode,efuseCfg.hbnCheckSign);
     if(psMode==BFLB_PSM_HBN&&(!efuseCfg.hbnCheckSign)){
@@ -361,7 +362,7 @@ int32_t BLSP_Boot_Parser_Check_Signature(Boot_Image_Config *bootImgCfg)
     }
     if(bootImgCfg->signType){
         MSG_DBG("Check sig1\r\n");
-        bflb_platform_clear_time();
+        startTime=bflb_platform_get_time_ms();
         BLSP_Boot2_Init_Sec_Eng_PKA();
         ret=bflb_ecdsa_verify(0,(uint32_t *)bootImgCfg->imgHash,sizeof(bootImgCfg->imgHash),
                                 (uint32_t *)bootImgCfg->ecKeyX,(uint32_t *)bootImgCfg->ecKeyY,
@@ -370,7 +371,7 @@ int32_t BLSP_Boot_Parser_Check_Signature(Boot_Image_Config *bootImgCfg)
             MSG_ERR("verify failed\n");
             return BFLB_BOOT2_IMG_SIGN_ERROR;
         }
-        MSG_DBG("Time=%d ms\r\n",bflb_platform_get_time_ms());
+        MSG_DBG("Time=%d ms\r\n",(unsigned int)(bflb_platform_get_time_ms()-startTime));
     }
     MSG_DBG("Success\r\n");
     return BFLB_BOOT2_SUCCESS;

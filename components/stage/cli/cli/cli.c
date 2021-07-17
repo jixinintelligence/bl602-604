@@ -663,6 +663,7 @@ static void mmem_cmd(char *buf, int len, int argc, char **argv);
 #endif
 static void reboot_cmd(char *buf, int len, int argc, char **argv);
 static void poweroff_cmd(char *buf, int len, int argc, char **argv);
+static void reset_cmd(char *buf, int len, int argc, char **argv);
 static void uptime_cmd(char *buf, int len, int argc, char **argv);
 static void ota_cmd(char *buf, int len, int argc, char **argv);
 static void ps_cmd(char *buf, int len, int argc, char **argv);
@@ -687,6 +688,7 @@ const struct cli_command built_ins[] STATIC_CLI_CMD_ATTRIBUTE = {
     { "sysver", "system version", version_cmd },
     { "reboot", "reboot system", reboot_cmd },
     { "poweroff", "poweroff system", poweroff_cmd },
+    { "reset", "system reset", reset_cmd },
 
     /*aos_rhino*/
     { "time", "system time", uptime_cmd },
@@ -926,6 +928,13 @@ static void poweroff_cmd(char *buf, int len, int argc, char **argv)
     hal_poweroff();
 }
 
+static void reset_cmd(char *buf, int len, int argc, char **argv)
+{
+    aos_cli_printf("system reset\r\n");
+
+    hal_sys_reset();
+}
+
 static void uptime_cmd(char *buf, int len, int argc, char **argv)
 {
     long long ms;
@@ -1001,7 +1010,7 @@ static int cb_idnoe(void *arg, inode_t *node)
         printf("----------------------------------------------------------------------------------\r\n");
     }
     printf("%10d\t\t%30s\t\t\t%s\r\n",
-            INODE_IS_CHAR(node) ? sizeof(struct file_ops) : (INODE_IS_BLOCK(node) ? sizeof(struct file_ops) : (INODE_IS_FS(node) ? sizeof(struct fs_ops) : 0)),
+            (int)(INODE_IS_CHAR(node) ? sizeof(struct file_ops) : (INODE_IS_BLOCK(node) ? sizeof(struct file_ops) : (INODE_IS_FS(node) ? sizeof(struct fs_ops) : 0))),
             node->i_name,
             INODE_IS_CHAR(node) ? "Char Device" : (INODE_IS_BLOCK(node) ? "Block Device" : (INODE_IS_FS(node) ? "File System" : "Unknown"))
     );
@@ -1111,7 +1120,7 @@ static void hexdump_cmd(char *buf, int len, int argc, char **argv)
     printf("Found file %s. XIP Addr %p, len %lu\r\n",
             argv[1],
             filebuf.buf,
-            filebuf.bufsize
+            (unsigned long)filebuf.bufsize
     );
     utils_hexdump(filebuf.buf, filebuf.bufsize);
     aos_close(fd);
@@ -1313,9 +1322,9 @@ init_general_err:
 
 static void console_cb_read(int fd, void *param)
 {
-    char buffer[16];
+    char buffer[64];  /* adapt to usb cdc since usb fifo is 64 bytes */
     int ret;
-                                                                                                                                                
+
     ret = aos_read(fd, buffer, sizeof(buffer));
     if (ret > 0) {
         if (ret <= sizeof(buffer)) {

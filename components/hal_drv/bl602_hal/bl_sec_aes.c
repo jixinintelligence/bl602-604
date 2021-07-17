@@ -36,6 +36,9 @@
 #include "bl_irq.h"
 #include "bl_sec.h"
 
+#include <blog.h>
+#define USER_UNUSED(a) ((void)(a))
+
 int bl_sec_aes_enc(uint8_t *key, int keysize, uint8_t *input, uint8_t *output)
 {
     return 0;
@@ -48,7 +51,7 @@ static void Aes_Compare_Data(const uint8_t *expected, uint8_t *input, uint32_t l
     for (i = 0; i < len; i++) {
         if (input[i] != expected[i]) {
             is_failed = 1;
-            printf("%s[%02d], %02x %02x\r\n",
+            blog_info("%s[%02d], %02x %02x\r\n",
                 input[i] ==expected[i] ? "S" : "F",
                 i,
                 input[i],
@@ -57,9 +60,9 @@ static void Aes_Compare_Data(const uint8_t *expected, uint8_t *input, uint32_t l
         }
     }
     if (is_failed) {
-        printf("====== Failed %lu Bytes======\r\n", len);
+        blog_error("====== Failed %lu Bytes======\r\n", len);
     } else {
-        printf("====== Success %lu Bytes=====\r\n", len);
+        blog_info("====== Success %lu Bytes=====\r\n", len);
     }
 }
 
@@ -68,10 +71,13 @@ static void _dump_iv_status(SEC_Eng_AES_Link_Config_Type *linkCfg)
     int i;
     uint8_t *iv;
 
+    USER_UNUSED(iv);
+    USER_UNUSED(i);
+
     for (i = 0, iv = (uint8_t*)&(linkCfg->aesIV0); i < 16; i++) {
-        printf("%02x", iv[i]);
+        blog_print("%02x", iv[i]);
     }
-    puts("\r\n");
+    blog_print("\r\n");
 }
 
 static const uint8_t aesSrcBuf_data[] = 
@@ -123,21 +129,21 @@ void Sec_Eng_AES_Link_Case_CBC_128(SEC_ENG_AES_ID_Type aesId)
     
     puts("[CBC] AES-128-CBC case...\r\n");
 
-    printf("[CBC] IV Status Initial, %08lx\r\n", linkCfg.aesSrcAddr);
+    blog_info("[CBC] IV Status Initial, %08lx\r\n", linkCfg.aesSrcAddr);
     _dump_iv_status(&linkCfg);
     Sec_Eng_AES_Link_Work(aesId, (uint32_t)&linkCfg, &(aesSrcBuf_data[0]), 32, aesDstBuf);
     Aes_Compare_Data(aesResult_entrypted_cbc_128, (uint8_t*)linkCfg.aesDstAddr, 32);
-    printf("[CBC] IV Status After, %08lx\r\n", linkCfg.aesSrcAddr);
+    blog_info("[CBC] IV Status After, %08lx\r\n", linkCfg.aesSrcAddr);
     _dump_iv_status(&linkCfg);
     
     Sec_Eng_AES_Link_Work(aesId, (uint32_t)&linkCfg, &(aesSrcBuf_data[0]) + 32, 16, aesDstBuf);
     Aes_Compare_Data(&(aesResult_entrypted_cbc_128[0]) + 32, (uint8_t*)linkCfg.aesDstAddr, 16);
-    printf("[CBC] IV Status After %08lx\r\n", linkCfg.aesSrcAddr);
+    blog_info("[CBC] IV Status After %08lx\r\n", linkCfg.aesSrcAddr);
     _dump_iv_status(&linkCfg);
     
     Sec_Eng_AES_Link_Work(aesId, (uint32_t)&linkCfg, &(aesSrcBuf_data[0]) + 48, 16, aesDstBuf);
     Aes_Compare_Data(&(aesResult_entrypted_cbc_128[0]) + 48, (uint8_t*)linkCfg.aesDstAddr, 16);
-    printf("[CBC] IV Status After, %08lx\r\n", linkCfg.aesSrcAddr);
+    blog_info("[CBC] IV Status After, %08lx\r\n", linkCfg.aesSrcAddr);
     _dump_iv_status(&linkCfg);
 
     Sec_Eng_AES_Disable_Link(aesId);
@@ -181,23 +187,23 @@ void Sec_Eng_AES_Link_Case_CTR_128(SEC_ENG_AES_ID_Type aesId)
     Sec_Eng_AES_Enable_Link(aesId);
     
     puts("[CTR] AES-128-CTR case...\r\n");
-    printf("[CTR] IV Status Initial, %08lx\r\n", linkCfg.aesSrcAddr);
+    blog_info("[CTR] IV Status Initial, %08lx\r\n", linkCfg.aesSrcAddr);
     _dump_iv_status(&linkCfg);
 
     Sec_Eng_AES_Link_Work(aesId, (uint32_t)&linkCfg, &(aesSrcBuf_data[0]), 32, aesDstBuf);
     Aes_Compare_Data(aesResult_entrypted_ctr_128, (uint8_t*)linkCfg.aesDstAddr, 32);
 
-    printf("[CTR] IV Status After %08lx\r\n", linkCfg.aesSrcAddr);
+    blog_info("[CTR] IV Status After %08lx\r\n", linkCfg.aesSrcAddr);
     _dump_iv_status(&linkCfg);
     
     Sec_Eng_AES_Link_Work(aesId, (uint32_t)&linkCfg, &(aesSrcBuf_data[0]) + 32, 16, aesDstBuf);
     Aes_Compare_Data(&(aesResult_entrypted_ctr_128[0]) + 32, (uint8_t*)linkCfg.aesDstAddr, 16);
-    printf("[CTR] IV Status After %08lx\r\n", linkCfg.aesSrcAddr);
+    blog_info("[CTR] IV Status After %08lx\r\n", linkCfg.aesSrcAddr);
     _dump_iv_status(&linkCfg);
     
     Sec_Eng_AES_Link_Work(aesId, (uint32_t)&linkCfg, &(aesSrcBuf_data[0]) + 48, 16, aesDstBuf);
     Aes_Compare_Data(&(aesResult_entrypted_ctr_128[0]) + 48, (uint8_t*)linkCfg.aesDstAddr, 16);
-    printf("[CTR] IV Status After, %08lx\r\n", linkCfg.aesSrcAddr);
+    blog_info("[CTR] IV Status After, %08lx\r\n", linkCfg.aesSrcAddr);
     _dump_iv_status(&linkCfg);
 
     Sec_Eng_AES_Disable_Link(aesId);
@@ -264,13 +270,13 @@ int bl_sec_aes_test(void)
 {
     bl_irq_register(SEC_AES_IRQn, bl_sec_aes_IRQHandler);
     bl_irq_enable(SEC_AES_IRQn);
-    puts("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n");
+    blog_print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n");
     Sec_Eng_AES_Link_Case_CBC_128(SEC_ENG_AES_ID0);
-    puts("####################################################################################\r\n");
+    blog_print("####################################################################################\r\n");
     Sec_Eng_AES_Link_Case_CTR_128(SEC_ENG_AES_ID0);
-    puts("####################################################################################\r\n");
+    blog_print("####################################################################################\r\n");
     Sec_Eng_AES_Link_Case_ECB_128(SEC_ENG_AES_ID0);
-    puts("------------------------------------------------------------------------------------\r\n");
+    blog_print("------------------------------------------------------------------------------------\r\n");
     return 0;
 }
 
@@ -286,6 +292,6 @@ static void _clear_aes_int()
 
 void bl_sec_aes_IRQHandler(void)
 {
-    puts("--->>> AES IRQ\r\n");
+    blog_print("--->>> AES IRQ\r\n");
     _clear_aes_int();
 }

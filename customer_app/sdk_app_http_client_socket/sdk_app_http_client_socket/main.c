@@ -48,6 +48,7 @@
 #include <bl_uart.h>
 #include <bl_chip.h>
 #include <bl_wifi.h>
+#include <hal_wifi.h>
 #include <bl_sec.h>
 #include <bl_cks.h>
 #include <bl_irq.h>
@@ -107,7 +108,7 @@ static HeapRegion_t xHeapRegions[] =
 };
 static wifi_interface_t wifi_interface;
 
-void user_vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName )
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName )
 {
     puts("Stack Overflow checked\r\n");
     while (1) {
@@ -115,7 +116,7 @@ void user_vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName )
     }
 }
 
-void user_vApplicationMallocFailedHook(void)
+void vApplicationMallocFailedHook(void)
 {
     printf("Memory Allocate Failed. Current left size is %d bytes\r\n",
         xPortGetFreeHeapSize()
@@ -125,7 +126,7 @@ void user_vApplicationMallocFailedHook(void)
     }
 }
 
-void user_vApplicationIdleHook(void)
+void vApplicationIdleHook(void)
 {
     __asm volatile(
             "   wfi     "
@@ -436,8 +437,6 @@ static void event_cb_wifi_event(input_event_t *event, void *private_data)
 static void cmd_stack_wifi(char *buf, int len, int argc, char **argv)
 {
     /*wifi fw stack and thread stuff*/
-    static StackType_t wifi_fw_stack[1024];
-    static StaticTask_t wifi_fw_task;
     static uint8_t stack_wifi_init  = 0;
 
 
@@ -446,8 +445,7 @@ static void cmd_stack_wifi(char *buf, int len, int argc, char **argv)
         return;
     }
     stack_wifi_init = 1;
-    void wifi_main(void *param);
-    xTaskCreateStatic(wifi_main, (char*)"fw", 1024, NULL, TASK_PRIORITY_FW, wifi_fw_stack, &wifi_fw_task);
+    hal_wifi_start_firmware_task();
     /*Trigger to start Wi-Fi*/
     aos_post_event(EV_WIFI, CODE_WIFI_ON_INIT_DONE, 0);
 
@@ -543,7 +541,7 @@ static void aos_loop_proc(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-void user_vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize)
+void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize)
 {
     /* If the buffers to be provided to the Idle task are declared inside this
     function then they must be declared static - otherwise they will be allocated on
@@ -567,7 +565,7 @@ void user_vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, Sta
 /* configSUPPORT_STATIC_ALLOCATION and configUSE_TIMERS are both set to 1, so the
 application must provide an implementation of vApplicationGetTimerTaskMemory()
 to provide the memory that is used by the Timer service task. */
-void user_vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackType_t **ppxTimerTaskStackBuffer, uint32_t *pulTimerTaskStackSize)
+void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackType_t **ppxTimerTaskStackBuffer, uint32_t *pulTimerTaskStackSize)
 {
     /* If the buffers to be provided to the Timer task are declared inside this
     function then they must be declared static - otherwise they will be allocated on
@@ -588,7 +586,7 @@ void user_vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, S
     *pulTimerTaskStackSize = configTIMER_TASK_STACK_DEPTH;
 }
 
-void user_vAssertCalled(void)
+void vAssertCalled(void)
 {
     volatile uint32_t ulSetTo1ToExitFunction = 0;
 
@@ -649,22 +647,6 @@ static void system_thread_init()
     /*nothing here*/
 }
 
-static void __update_rom_api(void)
-{
-    struct romapi_freertos_map *romapi_freertos;
-
-    romapi_freertos = hal_sys_romapi_get();
-
-    romapi_freertos->vApplicationIdleHook = user_vApplicationIdleHook;
-    romapi_freertos->vApplicationGetIdleTaskMemory = user_vApplicationGetIdleTaskMemory;
-    romapi_freertos->vApplicationStackOverflowHook = user_vApplicationStackOverflowHook;
-    romapi_freertos->vApplicationGetTimerTaskMemory = user_vApplicationGetTimerTaskMemory;
-    romapi_freertos->vApplicationMallocFailedHook = user_vApplicationMallocFailedHook;
-    romapi_freertos->vAssertCalled = user_vAssertCalled;
-
-    hal_sys_romapi_update(romapi_freertos);
-}
-
 void bfl_main()
 {
     static StackType_t aos_loop_proc_stack[1024];
@@ -677,7 +659,6 @@ void bfl_main()
     puts("Starting bl602 now....\r\n");
     //GLB_Set_EM_Sel(0);
 
-    __update_rom_api();
     _dump_boot_info();
 
     vPortDefineHeapRegions(xHeapRegions);

@@ -53,16 +53,28 @@ int bloop_init(struct loop_ctx *loop)
 
 int bloop_handler_register(struct loop_ctx *loop, const struct loop_evt_handler *handler, int priority)
 {
+    int i;
+
     if (priority < 0 || priority >= LOOP_TASK_MAX) {
         /* out of range */
         return -1;
     }
-    if (loop->handlers[priority]) {
-        /* already used */
-        return -2;
+
+    if (NULL == loop->handlers[priority]) {
+        i = priority;
+    } else {
+        for (i = priority; i < LOOP_TASK_MAX; i++) {
+            if (NULL == loop->handlers[priority]) {
+                break;
+            }
+        }
+        if (LOOP_TASK_MAX == i) {
+            /*No valid task SLOT*/
+            return -1;
+        }
     }
 
-    loop->handlers[priority] = handler;
+    loop->handlers[i] = handler;
     return 0;
 }
 

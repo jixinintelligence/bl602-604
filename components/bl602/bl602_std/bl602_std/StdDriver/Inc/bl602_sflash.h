@@ -184,6 +184,10 @@ uint32_t SFlash_Cache_Miss_Count_Get(void);
 void SFlash_Cache_Read_Disable(void);
 BL_Err_Type SFlash_Read(SPI_Flash_Cfg_Type *flashCfg,SF_Ctrl_IO_Type ioMode,uint8_t contRead,uint32_t addr,uint8_t *data,
                         uint32_t len);
+BL_Err_Type SFlash_Read_Reg_With_Cmd(SPI_Flash_Cfg_Type *flashCfg,uint8_t readRegCmd,uint8_t *regValue,
+                                     uint8_t regLen);
+BL_Err_Type SFlash_Write_Reg_With_Cmd(SPI_Flash_Cfg_Type *flashCfg,uint8_t writeRegCmd,uint8_t *regValue,
+                                      uint8_t regLen);
 
 /*@} end of group SFLAH_Public_Functions */
 

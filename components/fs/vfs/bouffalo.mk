@@ -24,3 +24,6 @@ COMPONENT_SRCDIRS := src device
 
 ##
 #CPPFLAGS +=
+ifeq ($(CONFIG_USB_CDC),1)
+CPPFLAGS += -DCFG_USB_CDC_ENABLE
+endif

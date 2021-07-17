@@ -46,6 +46,8 @@
 #include "bl_irqs.h"
 #include "bl_tx.h"
 
+#include <blog.h>
+#define USER_UNUSED(a) ((void)(a))
 #define RWNX_PRINT_CFM_ERR(req) \
         os_printf("%s: Status Error(%d)\n", #req, (&req##_cfm)->status)
 
@@ -53,10 +55,11 @@ struct bl_hw wifi_hw;
 
 int bl_cfg80211_connect(struct bl_hw *bl_hw, struct cfg80211_connect_params *sme);
 
-static void bl_set_vers(struct bl_hw *bl_hw)
+static void bl_set_vers(struct mm_version_cfm *version_cfm_ptr)
 {
-    u32 vers = bl_hw->version_cfm.version_lmac;
+    u32 vers = version_cfm_ptr->version_lmac;
 
+    USER_UNUSED(vers);
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
     os_printf("[version] lmac %u.%u.%u.%u\r\n",
@@ -65,11 +68,11 @@ static void bl_set_vers(struct bl_hw *bl_hw)
         (unsigned int)((vers >>  8) & 0xFF),
         (unsigned int)((vers >>  0) & 0xFF)
     );
-    os_printf("[version] version_machw_1 %08X\r\n", (unsigned int)bl_hw->version_cfm.version_machw_1);
-    os_printf("[version] version_machw_2 %08X\r\n", (unsigned int)bl_hw->version_cfm.version_machw_2);
-    os_printf("[version] version_phy_1 %08X\r\n", (unsigned int)bl_hw->version_cfm.version_phy_1);
-    os_printf("[version] version_phy_2 %08X\r\n", (unsigned int)bl_hw->version_cfm.version_phy_2);
-    os_printf("[version] features %08X\r\n", (unsigned int)bl_hw->version_cfm.features);
+    os_printf("[version] version_machw_1 %08X\r\n", (unsigned int)version_cfm_ptr->version_machw_1);
+    os_printf("[version] version_machw_2 %08X\r\n", (unsigned int)version_cfm_ptr->version_machw_2);
+    os_printf("[version] version_phy_1 %08X\r\n", (unsigned int)version_cfm_ptr->version_phy_1);
+    os_printf("[version] version_phy_2 %08X\r\n", (unsigned int)version_cfm_ptr->version_phy_2);
+    os_printf("[version] features %08X\r\n", (unsigned int)version_cfm_ptr->features);
 
     RWNX_DBG(RWNX_FN_LEAVE_STR);
 }
@@ -214,13 +217,18 @@ int bl_main_connect(const uint8_t* ssid, int ssid_len, const uint8_t *psk, int p
 
 int bl_main_disconnect()
 {
-    bl_send_sm_disconnect_req(&wifi_hw, 0x34);//XXX magic code
+    bl_send_sm_disconnect_req(&wifi_hw, 0x03);//XXX magic code
     return 0;
 }
 
 int bl_main_powersaving(int mode)
 {
     return bl_send_mm_powersaving_req(&wifi_hw, mode);
+}
+
+int bl_main_denoise(int mode)
+{
+    return bl_send_mm_denoise_req(&wifi_hw, mode);
 }
 
 int bl_main_monitor()
@@ -240,7 +248,6 @@ int bl_main_phy_up()
     if (error) {
         return -1;
     }
-    wifi_hw.drv_flags |= (1 << RWNX_DEV_STARTED);
 
     return 0;
 }
@@ -257,6 +264,15 @@ int bl_main_monitor_channel_set(int channel, int use_40MHZ)
     struct mm_monitor_channel_cfm cfm;
 
     bl_send_monitor_channel_set(&wifi_hw, &cfm, channel, use_40MHZ);
+
+    return 0;
+}
+
+int bl_main_beacon_interval_set(uint16_t beacon_int)
+{
+    struct mm_set_beacon_int_cfm cfm;
+
+    bl_send_beacon_interval_set(&wifi_hw, &cfm, beacon_int);
 
     return 0;
 }
@@ -281,7 +297,7 @@ int bl_main_rate_config(uint8_t sta_idx, uint16_t fixed_rate_cfg)
 
 int bl_main_set_country_code(char *country_code)
 {
-    printf("%s: country code: %s\r\n", __func__, country_code);
+    blog_info("%s: country code: %s\r\n", __func__, country_code);
     bl_msg_update_channel_cfg((const char *)country_code);
     bl_send_me_chan_config_req(&wifi_hw);
 
@@ -330,14 +346,14 @@ int bl_main_if_add(int is_sta, struct netif *netif, uint8_t *vif_index)
     return error;
 }
 
-int bl_main_apm_start(char *ssid, char *password, int channel, uint8_t vif_index)
+int bl_main_apm_start(char *ssid, char *password, int channel, uint8_t vif_index, uint8_t hidden_ssid, uint16_t bcn_int)
 {
     int error = 0;
     struct apm_start_cfm start_ap_cfm;
 
     memset(&start_ap_cfm, 0, sizeof(start_ap_cfm));
     os_printf("[WF] APM_START_REQ Sending with vif_index %u\r\n", vif_index);
-    error = bl_send_apm_start_req(&wifi_hw, &start_ap_cfm, ssid, password, channel, vif_index);
+    error = bl_send_apm_start_req(&wifi_hw, &start_ap_cfm, ssid, password, channel, vif_index, hidden_ssid, bcn_int);
     os_printf("[WF] APM_START_REQ Done\r\n");
     os_printf("[WF] status is %02X\r\n", start_ap_cfm.status);
     os_printf("[WF] vif_idx is %02X\r\n", start_ap_cfm.vif_idx);
@@ -375,7 +391,7 @@ int bl_main_apm_sta_cnt_get(uint8_t *sta_cnt)
         cnt++;
     }
     (*sta_cnt) = total_sta_cnt;
-    printf("Max limit sta cnt = %u, valid sta cnt = %u\r\n", total_sta_cnt, cnt);
+    blog_info("Max limit sta cnt = %u, valid sta cnt = %u\r\n", total_sta_cnt, cnt);
     return 0;
 }
 
@@ -417,7 +433,7 @@ int bl_main_apm_sta_delete(uint8_t sta_idx)
 
     bl_send_apm_sta_del_req(bl_hw, &sta_del_cfm, sta_idx, vif_idx);
     if (sta_del_cfm.status != 0) {
-        printf("del sta failure, cfm status = 0x%x\r\n", sta_del_cfm.status);
+        blog_info("del sta failure, cfm status = 0x%x\r\n", sta_del_cfm.status);
         return -1;
     }
 
@@ -435,22 +451,41 @@ int bl_main_apm_remove_all_sta()
     for (i = 0; i < total_sta_cnt; i++) {
         sta = &(bl_hw->sta_table[i]);
         if (1 == sta->is_used) {
-            printf("del sta[%u]\r\n", i);
+            blog_info("del sta[%u]\r\n", i);
             bl_main_apm_sta_delete(i);
         }
     }
     return 0;
 }
 
-int bl_main_scan()
+int bl_main_conf_max_sta(uint8_t max_sta_supported)
 {
-    bl_send_scanu_req(&wifi_hw);
+    return bl_send_apm_conf_max_sta_req(&wifi_hw, max_sta_supported);
+}
+
+int bl_main_cfg_task_req(uint32_t ops, uint32_t task, uint32_t element, uint32_t type, void *arg1, void *arg2)
+{
+    return bl_send_cfg_task_req(&wifi_hw, ops, task, element, type, arg1, arg2);
+}
+
+int bl_main_scan(uint16_t *fixed_channels, uint16_t channel_num)
+{
+    if (0 == channel_num) {
+        bl_send_scanu_req(&wifi_hw, NULL, 0);
+    } else { 
+        if (bl_get_fixed_channels_is_valid(fixed_channels, channel_num)) {
+            bl_send_scanu_req(&wifi_hw, fixed_channels, channel_num);
+        } else {
+            os_printf("---->unvalid channel");
+        }
+    }
     return 0;
 }
 
 static int cfg80211_init(struct bl_hw *bl_hw)
 {
     int ret = 0;
+    struct mm_version_cfm version_cfm = {};
 
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
@@ -474,11 +509,11 @@ static int cfg80211_init(struct bl_hw *bl_hw)
         goto err_out;
     }
     os_thread_delay(5);
-    ret = bl_send_version_req(bl_hw, &bl_hw->version_cfm);
+    ret = bl_send_version_req(bl_hw, &version_cfm);
     if (ret) {
         goto err_out;
     }
-    bl_set_vers(bl_hw);
+    bl_set_vers(&version_cfm);
     ret = bl_handle_dynparams(bl_hw);
     if (ret) {
         os_printf("bl_handle_dynparams Error\r\n");
@@ -492,7 +527,6 @@ static int cfg80211_init(struct bl_hw *bl_hw)
     bl_send_me_chan_config_req(bl_hw);
 
 
-    bl_hw->status = RWNX_INTERFACE_STATUS_UP;
 err_out:
     RWNX_DBG(RWNX_FN_LEAVE_STR);
     return ret;
@@ -510,7 +544,7 @@ int bl_cfg80211_scan(struct bl_hw *bl_hw)
 
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
-    error = bl_send_scanu_req(bl_hw);
+    error = bl_send_scanu_req(bl_hw, NULL, 0);
     if (error) {
         return error;
     }

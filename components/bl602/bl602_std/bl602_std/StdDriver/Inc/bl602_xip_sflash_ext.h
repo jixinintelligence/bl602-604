@@ -38,6 +38,10 @@
 
 #include "bl602_common.h"
 #include "bl602_sflash.h"
+#include "bl602_sflash_ext.h"
+#include "bl602_xip_sflash.h"
+#include "bl602_sf_cfg.h"
+#include "bl602_sf_cfg_ext.h"
 
 /** @addtogroup  BL602_Peripheral_Driver
  *  @{
@@ -68,8 +72,14 @@
 /** @defgroup  XIP_SFLASH_EXT_Public_Functions
  *  @{
  */
-void XIP_SFlash_Opt_Enter(uint8_t *aesEnable);
-void XIP_SFlash_Opt_Exit(uint8_t aesEnable);
+
+BL_Err_Type XIP_SFlash_Init(SPI_Flash_Cfg_Type *pFlashCfg);
+int XIP_SFlash_Read(uint32_t addr, uint8_t *dst, int len);
+int XIP_SFlash_Write(uint32_t addr, uint8_t *src, int len);
+int XIP_SFlash_Erase(uint32_t addr, int len);
+BL_Err_Type XIP_SFlash_RCV_Enable_Need_Lock(SPI_Flash_Cfg_Type *pFlashCfg, uint8_t rCmd, uint8_t wCmd,
+                                            uint8_t bitPos);
+int XIP_SFlash_RCV_Enable_With_Lock(SPI_Flash_Cfg_Type *pFlashCfg, uint8_t rCmd, uint8_t wCmd, uint8_t bitPos);
 
 /*@} end of group XIP_SFLASH_EXT_Public_Functions */
 

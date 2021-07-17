@@ -69,12 +69,12 @@ static HeapRegion_t xHeapRegions[] =
         { NULL, 0 } /* Terminates the array. */
 };
 
-void user_vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName )
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName )
 {
     /*empty*/
 }
 
-void user_vApplicationMallocFailedHook(void)
+void vApplicationMallocFailedHook(void)
 {
     printf("Memory Allocate Failed. Current left size is %d bytes\r\n",
         xPortGetFreeHeapSize()
@@ -82,7 +82,7 @@ void user_vApplicationMallocFailedHook(void)
     /*empty*/
 }
 
-void user_vApplicationIdleHook(void)
+void vApplicationIdleHook(void)
 {
     __asm volatile(
             "   wfi     "
@@ -149,7 +149,7 @@ static void aos_loop_proc(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-void user_vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize)
+void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize)
 {
     /* If the buffers to be provided to the Idle task are declared inside this
     function then they must be declared static - otherwise they will be allocated on
@@ -173,7 +173,7 @@ void user_vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, Sta
 /* configSUPPORT_STATIC_ALLOCATION and configUSE_TIMERS are both set to 1, so the
 application must provide an implementation of vApplicationGetTimerTaskMemory()
 to provide the memory that is used by the Timer service task. */
-void user_vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackType_t **ppxTimerTaskStackBuffer, uint32_t *pulTimerTaskStackSize)
+void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackType_t **ppxTimerTaskStackBuffer, uint32_t *pulTimerTaskStackSize)
 {
     /* If the buffers to be provided to the Timer task are declared inside this
     function then they must be declared static - otherwise they will be allocated on
@@ -194,7 +194,7 @@ void user_vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, S
     *pulTimerTaskStackSize = configTIMER_TASK_STACK_DEPTH;
 }
 
-void user_vAssertCalled(void)
+void vAssertCalled(void)
 {
     volatile uint32_t ulSetTo1ToExitFunction = 0;
 
@@ -255,43 +255,6 @@ static void system_thread_init()
     /*nothing here*/
 }
 
-static uint32_t user_clz(uint32_t priorities)
-{
-    return __builtin_clz(priorities);
-}
-
-void interrupt_entry(uint32_t mcause);
-void exception_entry(uint32_t mcause, uint32_t mepc, uint32_t mtval);
-static void __setup_rom_api(void)
-{
-    memset((void*)0x42014000, 0, 0x498);
-    *(uint32_t*)0x4201445c = (uint32_t)(void*)user_vApplicationIdleHook;
-    *(uint32_t*)0x42014460 = (uint32_t)(void*)interrupt_entry;
-    *(uint32_t*)0x42014464 = (uint32_t)(void*)user_vApplicationGetIdleTaskMemory;
-    *(uint32_t*)0x42014468 = (uint32_t)(void*)user_vApplicationStackOverflowHook;
-    *(uint32_t*)0x4201446c = (uint32_t)(void*)user_vApplicationGetTimerTaskMemory;
-    *(uint32_t*)0x42014470 = (uint32_t)(void*)sprintf;
-    *(uint32_t*)0x42014474 = (uint32_t)(void*)user_vApplicationMallocFailedHook;
-    *(uint32_t*)0x42014478 = (uint32_t)(void*)memcpy;
-    *(uint32_t*)0x4201447c = (uint32_t)(void*)user_vAssertCalled;
-    *(uint32_t*)0x42014480 = (uint32_t)(void*)strlen;
-    *(uint32_t*)0x42014484 = (uint32_t)(void*)memset;
-    *(uint32_t*)0x42014488 = (uint32_t)(void*)user_clz;
-    *(uint32_t*)0x4201448c = (uint32_t)(void*)exception_entry;
-    *(uint32_t*)0x42014490 = (uint32_t)(void*)strcpy;
-
-    *(uint32_t*)0x42014000 = 0x42014058;
-    *(uint32_t*)0x42014004 = 0x42014060;
-#if 0
-    *(uint32_t*)0x42014008 = 0x000007d0;
-#else
-    *(uint32_t*)0x42014008 = 32 * 1000 / 1000;//Use 32K
-#endif
-    /*xISRStackTop*/
-    extern const uint32_t __freertos_irq_stack_top[];
-    *(uint32_t*)0x42014494 = (uint32_t)&(__freertos_irq_stack_top[0]);
-}
-
 void bfl_main(void)
 {
     static StackType_t aos_loop_proc_stack[1024];
@@ -301,7 +264,6 @@ void bfl_main(void)
     bl_uart_init(0, 16, 7, 255, 255, 2 * 1000 * 1000);
     puts("Starting bl602 now....\r\n");
 
-    __setup_rom_api();
     _dump_boot_info();
 
     vPortDefineHeapRegions(xHeapRegions);

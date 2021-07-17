@@ -178,7 +178,7 @@ int32_t ATTR_TCM_SECTION BLSP_Boot2_Get_Clk_Cfg(Boot_Clk_Config *cfg)
 *******************************************************************************/
 void BLSP_Boot2_Show_Timer(void)
 {
-    MSG("Counter value=%d,%d\n",TIMER_GetCounterValue(TIMER_CH0));
+    MSG("Counter value=%d\n",(unsigned int)bflb_platform_get_time_ms());
 }
 
 /****************************************************************************//**

@@ -27,7 +27,7 @@ def bl602_demo_event_ble_wifi_tc(env, extra_data):
 
         dut.write('stack_ble')
         time.sleep(0.5)
-        dut.expect("random number is", timeout=1)
+        dut.expect(re.compile("BD_ADDR:(.+)"), timeout=1)
 
         dut.write('stack_wifi')
         time.sleep(0.5)
@@ -55,7 +55,7 @@ def bl602_demo_event_ble_wifi_tc(env, extra_data):
 
         dut.write('stack_ble')
         time.sleep(0.5)
-        dut.expect("random number is", timeout=1)
+        dut.expect(re.compile("BD_ADDR:(.+)"), timeout=1)
 
         dut.halt()
     except DUT.ExpectTimeout:

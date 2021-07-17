@@ -31,7 +31,7 @@ int vfs_pwm_open(inode_t *inode, file_t *fp)
             pwm_dev = (pwm_dev_t *)(fp->node->i_arg);
 
             /*  init pwm device. */
-            ret = hal_pwm_init(pwm_dev);
+            ret = hal_pwm_init_bydev(pwm_dev);
         } else {
             ret = VFS_SUCCESS;
         }
@@ -59,7 +59,7 @@ int vfs_pwm_close(file_t *fp)
             if (pwm_dev != NULL) {
 
                 /* turns off hardware. */
-                ret = hal_pwm_finalize(pwm_dev);
+                ret = hal_pwm_finalize_bydev(pwm_dev);
             } else {
                 ret = -EINVAL;
             }
@@ -95,14 +95,14 @@ int vfs_pwm_ioctl(file_t *fp, int cmd, unsigned long arg)
     switch(cmd) {
         case IOCTL_PWM_OUTPUT_START:
         {
-            ret = hal_pwm_start(pwm_dev);
+            ret = hal_pwm_start_bydev(pwm_dev);
             log_info("ioctl start.\r\n");
         }
         break;
         case IOCTL_PWM_OUTPUT_STOP:
         {
             log_info("ioctl stop.\r\n");
-            ret = hal_pwm_stop(pwm_dev);
+            ret = hal_pwm_stop_bydev(pwm_dev);
         }
         break;
         case IOCTL_PWM_OUTPUT_DUTY:
@@ -112,7 +112,7 @@ int vfs_pwm_ioctl(file_t *fp, int cmd, unsigned long arg)
                 return -EINVAL;
             }
             duty = *(float *)arg;
-            ret = hal_pwm_set_duty(pwm_dev, duty);
+            ret = hal_pwm_set_duty_bydev(pwm_dev, duty);
         }
         break;
         case IOCTL_PWM_OUTPUT_FREQ:
@@ -122,7 +122,7 @@ int vfs_pwm_ioctl(file_t *fp, int cmd, unsigned long arg)
                 return -EINVAL;
             }
             freq = *(int32_t *)arg;
-            ret = hal_pwm_set_freq(pwm_dev, freq);
+            ret = hal_pwm_set_freq_bydev(pwm_dev, freq);
         }
         break;
         default:

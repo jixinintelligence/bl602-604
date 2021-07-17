@@ -28,6 +28,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <string.h>
+#include <utils_log.h>
+#include <utils_tlv_bl.h>
+#include <bl60x_fw_api.h>
 
 #include "errno.h"
 #include "bl_msg_tx.h"
@@ -226,6 +229,25 @@ int bl_msg_get_channel_nums()
     return channel_num_default;
 }
 
+int bl_get_fixed_channels_is_valid(uint16_t *channels, uint16_t channel_num)
+{
+    int i;
+    int channel;
+
+    if (0 == channel_num) {
+        return 0;
+    }
+
+    for (i = 0; i < channel_num; i++) {
+        channel = channels[i];
+        if (0 == channel || (channel > bl_msg_get_channel_nums())) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 static inline uint16_t phy_channel_to_freq(uint8_t band, int channel)
 {
     uint16_t freq = 0xFFFF;
@@ -321,16 +343,7 @@ static int bl_send_msg(struct bl_hw *bl_hw, const void *msg_params,
 
     msg = container_of((void *)msg_params, struct lmac_msg, param);
 
-    if (!test_bit(RWNX_DEV_STARTED, &bl_hw->drv_flags) &&
-        reqid != MM_RESET_CFM && reqid != MM_VERSION_CFM &&
-        reqid != MM_START_CFM && reqid != MM_SET_IDLE_CFM &&
-        reqid != ME_CONFIG_CFM && reqid != MM_SET_PS_MODE_CFM &&
-        reqid != ME_CHAN_CONFIG_CFM) {
-        os_printf("%s: bypassing (RWNX_DEV_RESTARTING set) 0x%02x\n", __func__, reqid);
-        os_free(msg);
-        RWNX_DBG(RWNX_FN_LEAVE_STR);
-        return -EBUSY;
-    } else if (!bl_hw->ipc_env) {
+    if (!bl_hw->ipc_env) {
         os_printf("%s: bypassing (restart must have failed)\r\n", __func__);
         os_free(msg);
         RWNX_DBG(RWNX_FN_LEAVE_STR);
@@ -394,6 +407,21 @@ int bl_send_monitor_enable(struct bl_hw *bl_hw, struct mm_monitor_cfm *cfm)
     req->enable = 1;
 
     return bl_send_msg(bl_hw, req, 1, MM_MONITOR_CFM, cfm);
+}
+
+int bl_send_beacon_interval_set(struct bl_hw *bl_hw, struct mm_set_beacon_int_cfm *cfm, uint16_t beacon_int)
+{
+    struct mm_set_beacon_int_req *req;
+
+    RWNX_DBG(RWNX_FN_ENTRY_STR);
+
+    req = bl_msg_zalloc(MM_SET_BEACON_INT_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_beacon_int_req));
+    if (!req)
+        return -ENOMEM;
+
+    req->beacon_int = beacon_int;
+
+    return bl_send_msg(bl_hw, req, 1, MM_SET_BEACON_INT_CFM, cfm);
 }
 
 //TODO we only support 2.4GHz
@@ -525,7 +553,6 @@ int bl_send_me_chan_config_req(struct bl_hw *bl_hw)
             break;
     }
 
-    req->chan5G_cnt = 0;
     /* Send the ME_CHAN_CONFIG_REQ message to LMAC FW */
     return bl_send_msg(bl_hw, req, 1, ME_CHAN_CONFIG_CFM, NULL);
 }
@@ -559,11 +586,9 @@ int bl_send_start(struct bl_hw *bl_hw)
     if (!start_req_param)
         return -ENOMEM;
 
-    //TODO where get the phy_cfg ?
-    //FIXME we use magic here, since we know the first u32 is cal_en
-    bl_hw->phy_config.parameters[0] = 0x01;
-    /* Set parameters for the START message */
-    memcpy(&start_req_param->phy_cfg, &bl_hw->phy_config, sizeof(bl_hw->phy_config));
+    memset(&start_req_param->phy_cfg, 0, sizeof(start_req_param->phy_cfg));
+    //XXX magic number
+    start_req_param->phy_cfg.parameters[0] = 0x1;
     start_req_param->uapsd_timeout = (u32_l)bl_hw->mod_params->uapsd_timeout;
     start_req_param->lp_clk_accuracy = (u16_l)bl_hw->mod_params->lp_clk_ppm;
 
@@ -635,24 +660,30 @@ int bl_send_remove_if(struct bl_hw *bl_hw, uint8_t inst_nbr)
     return bl_send_msg(bl_hw, remove_if_req_param, 1, MM_REMOVE_IF_CFM, NULL);
 }
 
-int bl_send_scanu_req(struct bl_hw *bl_hw)
+int bl_send_scanu_req(struct bl_hw *bl_hw, uint16_t *channels, uint16_t channel_num)
 {
     struct scanu_start_req *req;
-    int i;
+    int i, index;
     uint8_t chan_flags = 0;
+    const struct ieee80211_channel *chan;
 
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
     /* Build the SCANU_START_REQ message */
     req = bl_msg_zalloc(SCANU_START_REQ, TASK_SCANU, DRV_TASK_ID,
                           sizeof(struct scanu_start_req));
-    if (!req)
+    if (!req) {
         return -ENOMEM;
+    }
 
     /* Set parameters */
     //FIXME should we use vif_index_sta when NO sta is added or just use 0?
     req->vif_idx = bl_hw->vif_index_sta;
-    req->chan_cnt = channel_num_default;
+    if (0 == channel_num) {
+        req->chan_cnt = channel_num_default;
+    } else {
+        req->chan_cnt = channel_num;
+    }
     req->ssid_cnt = 0;
     req->bssid = mac_addr_bcst;
     req->no_cck = true;//FIXME params? talk with firmware guys
@@ -674,7 +705,8 @@ int bl_send_scanu_req(struct bl_hw *bl_hw)
     req->add_ies = 0;
 
     for (i = 0; i < req->chan_cnt; i++) {
-        const struct ieee80211_channel *chan = &(channels_default[i]);
+        index = (channel_num_default == req->chan_cnt) ? i : (channels[i]);
+        chan = &(channels_default[index]);
 
         req->chan[i].band = chan->band;
         req->chan[i].freq = chan->center_freq;
@@ -840,7 +872,26 @@ int bl_send_mm_powersaving_req(struct bl_hw *bl_hw, int mode)
     return bl_send_msg(bl_hw, req, 1, MM_SET_PS_MODE_CFM, NULL);
 }
 
-int bl_send_apm_start_req(struct bl_hw *bl_hw, struct apm_start_cfm *cfm, char *ssid, char *password, int channel, uint8_t vif_index)
+int bl_send_mm_denoise_req(struct bl_hw *bl_hw, int mode)
+{
+    struct mm_set_denoise_req *req;
+
+    RWNX_DBG(RWNX_FN_ENTRY_STR);
+
+    /* Build the MM_DENOISE_REQ message */
+    req = bl_msg_zalloc(MM_DENOISE_REQ, TASK_MM, DRV_TASK_ID, sizeof(struct mm_set_denoise_req));
+    if (!req) {
+        return -ENOMEM;
+    }
+
+    /* Set parameters for the MM_SET_PS_MODE_REQ message */
+    req->denoise_mode = mode;
+
+    /* Send the MM_SET_PS_MODE_REQ message to LMAC FW */
+    return bl_send_msg(bl_hw, req, 1, MM_SET_PS_MODE_CFM, NULL);
+}
+
+int bl_send_apm_start_req(struct bl_hw *bl_hw, struct apm_start_cfm *cfm, char *ssid, char *password, int channel, uint8_t vif_index, uint8_t hidden_ssid, uint16_t bcn_int)
 {
     struct apm_start_req *req;
     uint8_t rate[] = {0x82,0x84,0x8b,0x96,0x12,0x24,0x48,0x6c,0x0c,0x18,0x30,0x60};
@@ -863,10 +914,11 @@ int bl_send_apm_start_req(struct bl_hw *bl_hw, struct apm_start_cfm *cfm, char *
     req->center_freq1 = req->chan.freq;
     req->center_freq2 = 0;
     req->ch_width = PHY_CHNL_BW_20;
+    req->hidden_ssid = hidden_ssid;
     req->bcn_addr = 0;
     req->bcn_len = 0;
     req->tim_oft = 0;
-    req->bcn_int = 0x64;
+    req->bcn_int = bcn_int;
     req->flags = 0x08;
     //req->ctrl_port_ethertype = ETH_P_PAE;
     req->ctrl_port_ethertype = 0x8e88;
@@ -901,7 +953,7 @@ int bl_send_apm_start_req(struct bl_hw *bl_hw, struct apm_start_cfm *cfm, char *
     req->ssid.length = strlen(ssid);
     req->rate_set.length = 12;
     memcpy(req->rate_set.array, rate, req->rate_set.length);
-    req->beacon_period = 0x64;
+    req->beacon_period = 0x1; //force AP DTIM period
     req->qos_supported = 1;
 #endif
 
@@ -946,6 +998,79 @@ int bl_send_apm_sta_del_req(struct bl_hw *bl_hw, struct apm_sta_del_cfm *cfm, ui
 
     /* Send the APM_STA_DEL_REQ message to LMAC FW */
     return bl_send_msg(bl_hw, req, 1, APM_STA_DEL_CFM, cfm);
+}
+
+int bl_send_apm_conf_max_sta_req(struct bl_hw *bl_hw, uint8_t max_sta_supported)
+{
+    struct apm_conf_max_sta_req *req;
+
+    /* Build the APM_STOP_REQ message */
+    req = bl_msg_zalloc(APM_CONF_MAX_STA_REQ, TASK_APM, DRV_TASK_ID, sizeof(struct apm_conf_max_sta_req));
+    if (!req) {
+        return -ENOMEM;
+    }
+
+    /* Set parameters for the APM_STOP_REQ message */
+    req->max_sta_supported = max_sta_supported;
+
+    /* Send the APM_STOP_REQ message to LMAC FW */
+    return bl_send_msg(bl_hw, req, 1, APM_CONF_MAX_STA_CFM, NULL);
+}
+
+int bl_send_cfg_task_req(struct bl_hw *bl_hw, uint32_t ops, uint32_t task, uint32_t element, uint32_t type, void *arg1, void *arg2)
+{
+    struct cfg_start_req *req;
+#define ENTRY_BUF_SIZE      (8)
+
+    /* Build the APM_STOP_REQ message */
+    //FIXME static allocated size
+    req = bl_msg_zalloc(CFG_START_REQ, TASK_CFG, DRV_TASK_ID, sizeof(struct cfg_start_req) + 32);
+    if (!req) {
+        return -ENOMEM;
+    }
+
+    /* Set parameters for the APM_STOP_REQ message */
+    req->ops = ops;
+    switch (req->ops) {
+        case CFG_ELEMENT_TYPE_OPS_SET:
+        {
+            req->u.set[0].task = task;
+            req->u.set[0].element = element;
+            req->u.set[0].type = type;
+            req->u.set[0].length = utils_tlv_bl_pack_auto(
+                req->u.set[0].buf,
+                ENTRY_BUF_SIZE,
+                type, 
+                arg1
+            );
+        }
+        break;
+        case CFG_ELEMENT_TYPE_OPS_GET:
+        {
+            //TODO
+        }
+        break;
+        case CFG_ELEMENT_TYPE_OPS_RESET:
+        {
+            //TODO
+        }
+        break;
+        case CFG_ELEMENT_TYPE_OPS_DUMP_DEBUG:
+        {
+            req->u.set[0].task = task;
+            req->u.set[0].element = element;
+            req->u.set[0].length = 0;
+        }
+        break;
+        default:
+        {
+            /*empty here*/
+            BL_ASSERT(0);
+        }
+    }
+
+    /* Send the APM_STOP_REQ message to LMAC FW */
+    return bl_send_msg(bl_hw, req, 1, CFG_START_CFM, NULL);
 }
 
 int bl_send_channel_set_req(struct bl_hw *bl_hw, int channel)

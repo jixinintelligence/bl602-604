@@ -218,7 +218,7 @@ static void send_attention_status(struct bt_mesh_model *model,
 				  struct bt_mesh_msg_ctx *ctx)
 {
 	/* Needed size: opcode (2 bytes) + msg + MIC */
-	NET_BUF_SIMPLE_DEFINE(msg, 2 + 1 + 4);
+	BT_MESH_MODEL_BUF_DEFINE(msg, OP_ATTENTION_STATUS, 1);
 	struct bt_mesh_health_srv *srv = model->user_data;
 	u8_t time;
 
@@ -271,7 +271,7 @@ static void send_health_period_status(struct bt_mesh_model *model,
 				      struct bt_mesh_msg_ctx *ctx)
 {
 	/* Needed size: opcode (2 bytes) + msg + MIC */
-	NET_BUF_SIMPLE_DEFINE(msg, 2 + 1 + 4);
+	BT_MESH_MODEL_BUF_DEFINE(msg, OP_HEALTH_PERIOD_STATUS, 1);
 
 	bt_mesh_model_msg_init(&msg, OP_HEALTH_PERIOD_STATUS);
 
@@ -363,7 +363,7 @@ int bt_mesh_fault_update(struct bt_mesh_elem *elem)
 	/* Let periodic publishing, if enabled, take care of sending the
 	 * Health Current Status.
 	 */
-	if (bt_mesh_model_pub_period_get(mod)) {
+	if (bt_mesh_model_pub_period_get(mod) > 0) {
 		return 0;
 	}
 
@@ -384,15 +384,11 @@ static void attention_off(struct k_work *work)
 	}
 }
 
-int bt_mesh_health_srv_init(struct bt_mesh_model *model, bool primary)
+static int health_srv_init(struct bt_mesh_model *model)
 {
 	struct bt_mesh_health_srv *srv = model->user_data;
 
 	if (!srv) {
-		if (!primary) {
-			return 0;
-		}
-
 		BT_ERR("No Health Server context provided");
 		return -EINVAL;
 	}
@@ -408,12 +404,16 @@ int bt_mesh_health_srv_init(struct bt_mesh_model *model, bool primary)
 
 	srv->model = model;
 
-	if (primary) {
+	if (bt_mesh_model_in_primary(model)) {
 		health_srv = srv;
 	}
 
 	return 0;
 }
+
+const struct bt_mesh_model_cb bt_mesh_health_srv_cb = {
+	.init = health_srv_init,
+};
 
 void bt_mesh_attention(struct bt_mesh_model *model, u8_t time)
 {
@@ -431,12 +431,12 @@ void bt_mesh_attention(struct bt_mesh_model *model, u8_t time)
 		srv = model->user_data;
 	}
 
-	if (time) {
+	if (time > 0) {
 		if (srv->cb && srv->cb->attn_on) {
 			srv->cb->attn_on(model);
 		}
 
-		k_delayed_work_submit(&srv->attn_timer, time * 1000U);
+		k_delayed_work_submit(&srv->attn_timer, K_SECONDS(time));
 	} else {
 		k_delayed_work_cancel(&srv->attn_timer);
 

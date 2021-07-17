@@ -4,7 +4,7 @@
 COMPONENT_ADD_INCLUDEDIRS +=
 
 ## not be exported to project level
-COMPONENT_PRIV_INCLUDEDIRS := include/icrypto
+COMPONENT_PRIV_INCLUDEDIRS := include/mbedtls include/icrypto include/mbedtls_port
 
 NAME := imbedtls
 

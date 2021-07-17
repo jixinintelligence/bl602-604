@@ -32,9 +32,9 @@ def bl602_demo_event_RPI_wifi_ap_tc(env, extra_data):
         dut.write('wifi_ap_start 1')
         ap_ssid = dut.expect(re.compile(r"\[WF\]\[SM\] start AP with ssid (.+);"), timeout=2)
         print('Started AP with SSID: {}'.format(ap_ssid[0]))
-        connect_device(ap_ssid[0])
-        time.sleep(1)
-        dut.expect('ap mode: add sta mac', timeout=10)
+        rst = connect_device(ap_ssid[0])
+        if rst != True:
+            raise Exception
         
         dut.halt()
     except Exception:
@@ -42,6 +42,7 @@ def bl602_demo_event_RPI_wifi_ap_tc(env, extra_data):
         raise
 
 def connect_device(ssid):
+    counter = 0
     wifi = pywifi.PyWiFi()
     iface = wifi.interfaces()[1]
     iface.disconnect()
@@ -56,8 +57,29 @@ def connect_device(ssid):
 
     iface.remove_all_network_profiles()
     tmp_profile = iface.add_network_profile(profile)
-    iface.connect(tmp_profile)
+    while counter < 10:
+        counter = counter +1
+        print ('counter:{}'.format(counter))
+        iface.connect(tmp_profile)
+        time.sleep(10)
+        status = iface.status()
 
+        if status == const.IFACE_SCANNING:
+            print ('scan')
+        elif status == const.IFACE_INACTIVE:
+            print ('incative')
+        elif status == const.IFACE_CONNECTING:
+            print ('connecting')
+        elif status == const.IFACE_DISCONNECTED:
+            print ('disconnect')
+        elif status == const.IFACE_CONNECTED:
+            print ('connected')
+            return True
+        else:
+            print ('error')
+            return False
+        iface.disconnect()
+    return False
 
 if __name__ == '__main__':
     bl602_demo_event_RPI_wifi_ap_tc()

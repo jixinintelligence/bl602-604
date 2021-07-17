@@ -1,29 +1,4 @@
-CFLAGS += -DCONFIG_BT_MESH -DCONFIG_BT_MESH_PROV
-#CFLAGS += -DCONFIG_BT_SETTINGS
-ifeq ($(CONFIG_BT_MESH_PB_ADV),1)
-CFLAGS += -DCONFIG_BT_MESH_PB_ADV
-endif
-ifeq ($(CONFIG_BT_MESH_PB_GATT),1)
-CFLAGS += -DCONFIG_BT_MESH_PB_GATT
-endif
-ifeq ($(CONFIG_BT_MESH_FRIEND),1)
-CFLAGS += -DCONFIG_BT_MESH_FRIEND
-endif
-ifeq ($(CONFIG_BT_MESH_LOW_POWER),1)
-CFLAGS += -DCONFIG_BT_MESH_LOW_POWER
-endif
-ifeq ($(CONFIG_BT_MESH_PROXY),1)
-CFLAGS += -DCONFIG_BT_MESH_PROXY
-endif
-ifeq ($(CONFIG_BT_MESH_GATT_PROXY),1)
-CFLAGS += -DCONFIG_BT_MESH_GATT_PROXY
-endif
-ifeq ($(CONFIG_BLE_STACK_DBG_PRINT),1)
-CFLAGS += -DCFG_BLE_STACK_DBG_PRINT
-endif
-ifeq ($(CONFIG_BT_MESH_MODEL_GEN_SRV),1)
-CFLAGS += -DCONFIG_BT_MESH_MODEL_GEN_SRV
-endif 
+include $(COMPONENT_PATH)/../ble_common.mk
 
 # Component Makefile
 #
@@ -31,8 +6,12 @@ endif
 COMPONENT_ADD_INCLUDEDIRS    += src \
                                 src/include  \
                                 src/mesh_cli_cmds  \
-                                src/mesh_models/include  \
+								src/mem_slab \
+
+ifeq ($(CONFIG_BT_MESH_MODEL), 0)
+COMPONENT_ADD_INCLUDEDIRS    += src/mesh_models/include  \
                                 src/mesh_models/server/include
+endif
 
 ## not be exported to project level
 COMPONENT_PRIV_INCLUDEDIRS   :=
@@ -53,6 +32,8 @@ COMPONENT_SRCS   := src/access.c \
 					src/settings.c \
 					src/transport.c \
 					src/mesh_cli_cmds/mesh_cli_cmds.c \
+					src/local_operation.c \
+					src/mem_slab/slab.c
 
 ifeq ($(CONFIG_BT_MESH_FRIEND),1)
 COMPONENT_SRCS   += src/friend.c
@@ -62,14 +43,30 @@ ifeq ($(CONFIG_BT_MESH_LOW_POWER),1)
 COMPONENT_SRCS   += src/lpn.c
 endif
 
+ifeq ($(CONFIG_BT_MESH_PB_ADV),1)
+COMPONENT_SRCS   += src/pb_adv.c
+endif
+
+ifeq ($(CONFIG_BT_MESH_PB_GATT),1)
+COMPONENT_SRCS   += src/pb_gatt.c
+endif
+
+ifeq ($(CONFIG_BT_MESH_CDB),1)
+COMPONENT_SRCS   += src/cdb.c
+endif
+
+ifeq ($(CONFIG_BT_MESH_MODEL), 0)
 ifeq ($(CONFIG_BT_MESH_MODEL_GEN_SRV),1)
 COMPONENT_SRCS   += src/mesh_models/server/common_srv.c \
                     src/mesh_models/server/gen_srv.c 
+endif
 endif
 
 COMPONENT_OBJS   := $(patsubst %.c,%.o, $(COMPONENT_SRCS))
 COMPONENT_SRCDIRS:= src \
                     src/mesh_cli_cmds \
-                    src/mesh_models/server
+					src/mem_slab \
 
-include $(COMPONENT_PATH)/../ble_common.mk
+ifeq ($(CONFIG_BT_MESH_MODEL), 0)
+COMPONENT_SRCDIRS+= src/mesh_models/server
+endif

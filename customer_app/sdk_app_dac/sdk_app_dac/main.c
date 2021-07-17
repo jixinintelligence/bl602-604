@@ -53,6 +53,10 @@
 #include <blog.h>
 #include "demo.h"
 
+#include <bl_romfs.h>
+#include <vfs.h>
+#include <fs/vfs_romfs.h>
+
 #include "dac_audio.h"
 
 extern uint8_t _heap_start;
@@ -67,7 +71,7 @@ static HeapRegion_t xHeapRegions[] =
         { NULL, 0 } /* Terminates the array. */
 };
 
-void user_vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName )
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName )
 {
     puts("Stack Overflow checked\r\n");
     while (1) {
@@ -75,7 +79,7 @@ void user_vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName )
     }
 }
 
-void user_vApplicationMallocFailedHook(void)
+void vApplicationMallocFailedHook(void)
 {
     printf("Memory Allocate Failed. Current left size is %d bytes\r\n",
         xPortGetFreeHeapSize()
@@ -85,7 +89,7 @@ void user_vApplicationMallocFailedHook(void)
     }
 }
 
-void user_vApplicationIdleHook(void)
+void vApplicationIdleHook(void)
 {
     __asm volatile(
             "   wfi     "
@@ -122,6 +126,43 @@ static int get_dts_addr(const char *name, uint32_t *start, uint32_t *off)
     return 0;
 }
 
+
+static void cmd_play_audio(char *buf, int len, int argc, char **argv)
+{
+    int sampling = 0;
+    int fd_audio;
+    romfs_filebuf_t filebuf;
+    //uint16_t  *p_u16addr;
+    uint32_t *p_u32addr;
+    uint32_t bufsize;
+    
+    fd_audio = aos_open("/romfs/audio_32k", 0);
+
+    if (fd_audio < 0) {
+        printf("open failed \r\n");
+    }
+
+    aos_ioctl(fd_audio, IOCTL_ROMFS_GET_FILEBUF, (long unsigned int)&filebuf);
+    aos_close(fd_audio);
+
+    p_u32addr = filebuf.buf;
+    bufsize = filebuf.bufsize;
+    
+    audio_dac_dma_test(p_u32addr, bufsize, sampling); 
+
+    return;
+
+}
+
+int bl_sys_play_audio_init(void)
+{
+    return 0;
+}
+
+const static struct cli_command cmds_user[] STATIC_CLI_CMD_ATTRIBUTE = {
+    { "play_audio", "play audio 32k 32bit", cmd_play_audio},
+};
+
 static void aos_loop_proc(void *pvParameters)
 {
     int fd_console;
@@ -134,6 +175,14 @@ static void aos_loop_proc(void *pvParameters)
     if (0 == get_dts_addr("uart", &fdt, &offset)) {
         vfs_uart_init(fdt, offset);
     }
+     
+    #ifdef CONF_USER_ENABLE_VFS_ROMFS
+    romfs_register();
+    printf("romfs register \r\n");
+    #endif
+
+    bl_sys_play_audio_init();
+
 
     aos_loop_init();
 
@@ -145,7 +194,7 @@ static void aos_loop_proc(void *pvParameters)
         _cli_init();
     }
     
-    audio_dac_dma_test();
+    
     aos_loop_run();
 
     puts("------------------------------------------\r\n");
@@ -154,7 +203,7 @@ static void aos_loop_proc(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-void user_vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize)
+void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize)
 {
     /* If the buffers to be provided to the Idle task are declared inside this
     function then they must be declared static - otherwise they will be allocated on
@@ -178,7 +227,7 @@ void user_vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, Sta
 /* configSUPPORT_STATIC_ALLOCATION and configUSE_TIMERS are both set to 1, so the
 application must provide an implementation of vApplicationGetTimerTaskMemory()
 to provide the memory that is used by the Timer service task. */
-void user_vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackType_t **ppxTimerTaskStackBuffer, uint32_t *pulTimerTaskStackSize)
+void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackType_t **ppxTimerTaskStackBuffer, uint32_t *pulTimerTaskStackSize)
 {
     /* If the buffers to be provided to the Timer task are declared inside this
     function then they must be declared static - otherwise they will be allocated on
@@ -199,7 +248,7 @@ void user_vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, S
     *pulTimerTaskStackSize = configTIMER_TASK_STACK_DEPTH;
 }
 
-void user_vAssertCalled(void)
+void vAssertCalled(void)
 {
     volatile uint32_t ulSetTo1ToExitFunction = 0;
 
@@ -260,22 +309,6 @@ static void system_thread_init()
     /*nothing here*/
 }
 
-static void __update_rom_api(void)
-{
-    struct romapi_freertos_map *romapi_freertos;
-
-    romapi_freertos = hal_sys_romapi_get();
-
-    romapi_freertos->vApplicationIdleHook = user_vApplicationIdleHook;
-    romapi_freertos->vApplicationGetIdleTaskMemory = user_vApplicationGetIdleTaskMemory;
-    romapi_freertos->vApplicationStackOverflowHook = user_vApplicationStackOverflowHook;
-    romapi_freertos->vApplicationGetTimerTaskMemory = user_vApplicationGetTimerTaskMemory;
-    romapi_freertos->vApplicationMallocFailedHook = user_vApplicationMallocFailedHook;
-    romapi_freertos->vAssertCalled = user_vAssertCalled;
-
-    hal_sys_romapi_update(romapi_freertos);
-}
-
 void bfl_main()
 {
     static StackType_t aos_loop_proc_stack[1024];
@@ -285,7 +318,6 @@ void bfl_main()
     bl_uart_init(0, 16, 7, 255, 255, 2 * 1000 * 1000);
     puts("Starting bl602 now....\r\n");
 
-    __update_rom_api();
     _dump_boot_info();
 
     vPortDefineHeapRegions(xHeapRegions);

@@ -207,12 +207,10 @@ static int cli_wait(void)
 	return err;
 }
 
-int bt_mesh_health_attention_get(u16_t net_idx, u16_t addr, u16_t app_idx,
-				 u8_t *attention)
+int bt_mesh_health_attention_get(u16_t addr, u16_t app_idx, u8_t *attention)
 {
-	NET_BUF_SIMPLE_DEFINE(msg, 2 + 0 + 4);
+	BT_MESH_MODEL_BUF_DEFINE(msg, OP_ATTENTION_GET, 0);
 	struct bt_mesh_msg_ctx ctx = {
-		.net_idx = net_idx,
 		.app_idx = app_idx,
 		.addr = addr,
 		.send_ttl = BT_MESH_TTL_DEFAULT,
@@ -239,12 +237,11 @@ int bt_mesh_health_attention_get(u16_t net_idx, u16_t addr, u16_t app_idx,
 	return cli_wait();
 }
 
-int bt_mesh_health_attention_set(u16_t net_idx, u16_t addr, u16_t app_idx,
-				 u8_t attention, u8_t *updated_attention)
+int bt_mesh_health_attention_set(u16_t addr, u16_t app_idx, u8_t attention,
+				 u8_t *updated_attention)
 {
-	NET_BUF_SIMPLE_DEFINE(msg, 2 + 1 + 4);
+	BT_MESH_MODEL_BUF_DEFINE(msg, OP_ATTENTION_SET, 1);
 	struct bt_mesh_msg_ctx ctx = {
-		.net_idx = net_idx,
 		.app_idx = app_idx,
 		.addr = addr,
 		.send_ttl = BT_MESH_TTL_DEFAULT,
@@ -282,12 +279,10 @@ int bt_mesh_health_attention_set(u16_t net_idx, u16_t addr, u16_t app_idx,
 	return cli_wait();
 }
 
-int bt_mesh_health_period_get(u16_t net_idx, u16_t addr, u16_t app_idx,
-			      u8_t *divisor)
+int bt_mesh_health_period_get(u16_t addr, u16_t app_idx, u8_t *divisor)
 {
-	NET_BUF_SIMPLE_DEFINE(msg, 2 + 0 + 4);
+	BT_MESH_MODEL_BUF_DEFINE(msg, OP_HEALTH_PERIOD_GET, 0);
 	struct bt_mesh_msg_ctx ctx = {
-		.net_idx = net_idx,
 		.app_idx = app_idx,
 		.addr = addr,
 		.send_ttl = BT_MESH_TTL_DEFAULT,
@@ -314,12 +309,11 @@ int bt_mesh_health_period_get(u16_t net_idx, u16_t addr, u16_t app_idx,
 	return cli_wait();
 }
 
-int bt_mesh_health_period_set(u16_t net_idx, u16_t addr, u16_t app_idx,
-			      u8_t divisor, u8_t *updated_divisor)
+int bt_mesh_health_period_set(u16_t addr, u16_t app_idx, u8_t divisor,
+				 u8_t *updated_divisor)
 {
-	NET_BUF_SIMPLE_DEFINE(msg, 2 + 1 + 4);
+	BT_MESH_MODEL_BUF_DEFINE(msg, OP_HEALTH_PERIOD_SET, 1);
 	struct bt_mesh_msg_ctx ctx = {
-		.net_idx = net_idx,
 		.app_idx = app_idx,
 		.addr = addr,
 		.send_ttl = BT_MESH_TTL_DEFAULT,
@@ -357,13 +351,12 @@ int bt_mesh_health_period_set(u16_t net_idx, u16_t addr, u16_t app_idx,
 	return cli_wait();
 }
 
-int bt_mesh_health_fault_test(u16_t net_idx, u16_t addr, u16_t app_idx,
-			      u16_t cid, u8_t test_id, u8_t *faults,
-			      size_t *fault_count)
+int bt_mesh_health_fault_test(u16_t addr, u16_t app_idx, u16_t cid,
+				 u8_t test_id, u8_t *faults,
+				 size_t *fault_count)
 {
-	NET_BUF_SIMPLE_DEFINE(msg, 2 + 3 + 4);
+	BT_MESH_MODEL_BUF_DEFINE(msg, OP_HEALTH_FAULT_TEST, 3);
 	struct bt_mesh_msg_ctx ctx = {
-		.net_idx = net_idx,
 		.app_idx = app_idx,
 		.addr = addr,
 		.send_ttl = BT_MESH_TTL_DEFAULT,
@@ -405,13 +398,12 @@ int bt_mesh_health_fault_test(u16_t net_idx, u16_t addr, u16_t app_idx,
 	return cli_wait();
 }
 
-int bt_mesh_health_fault_clear(u16_t net_idx, u16_t addr, u16_t app_idx,
-			       u16_t cid, u8_t *test_id, u8_t *faults,
-			       size_t *fault_count)
+int bt_mesh_health_fault_clear(u16_t addr, u16_t app_idx, u16_t cid,
+				 u8_t *test_id, u8_t *faults,
+				 size_t *fault_count)
 {
-	NET_BUF_SIMPLE_DEFINE(msg, 2 + 2 + 4);
+	BT_MESH_MODEL_BUF_DEFINE(msg, OP_HEALTH_FAULT_CLEAR, 2);
 	struct bt_mesh_msg_ctx ctx = {
-		.net_idx = net_idx,
 		.app_idx = app_idx,
 		.addr = addr,
 		.send_ttl = BT_MESH_TTL_DEFAULT,
@@ -452,13 +444,12 @@ int bt_mesh_health_fault_clear(u16_t net_idx, u16_t addr, u16_t app_idx,
 	return cli_wait();
 }
 
-int bt_mesh_health_fault_get(u16_t net_idx, u16_t addr, u16_t app_idx,
-			     u16_t cid, u8_t *test_id, u8_t *faults,
-			     size_t *fault_count)
+int bt_mesh_health_fault_get(u16_t addr, u16_t app_idx, u16_t cid,
+				 u8_t *test_id, u8_t *faults,
+				 size_t *fault_count)
 {
-	NET_BUF_SIMPLE_DEFINE(msg, 2 + 2 + 4);
+	BT_MESH_MODEL_BUF_DEFINE(msg, OP_HEALTH_FAULT_GET, 2);
 	struct bt_mesh_msg_ctx ctx = {
-		.net_idx = net_idx,
 		.app_idx = app_idx,
 		.addr = addr,
 		.send_ttl = BT_MESH_TTL_DEFAULT,
@@ -507,15 +498,16 @@ int bt_mesh_health_cli_set(struct bt_mesh_model *model)
 	}
 
 	health_cli = model->user_data;
+	msg_timeout = 2 * MSEC_PER_SEC;
 
 	return 0;
 }
 
-int bt_mesh_health_cli_init(struct bt_mesh_model *model, bool primary)
+static int health_cli_init(struct bt_mesh_model *model)
 {
 	struct bt_mesh_health_cli *cli = model->user_data;
 
-	BT_DBG("primary %u", primary);
+	BT_DBG("primary %u", bt_mesh_model_in_primary(model));
 
 	if (!cli) {
 		BT_ERR("No Health Client context provided");
@@ -534,3 +526,7 @@ int bt_mesh_health_cli_init(struct bt_mesh_model *model, bool primary)
 
 	return 0;
 }
+
+const struct bt_mesh_model_cb bt_mesh_health_cli_cb = {
+	.init = health_cli_init,
+};

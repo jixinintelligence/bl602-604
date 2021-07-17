@@ -35,6 +35,7 @@
   */
 
 #include "bl602_i2c.h"
+#include "bl602_glb.h"
 
 /** @addtogroup  BL602_Peripheral_Driver
  *  @{
@@ -202,8 +203,8 @@ void I2C_Enable(I2C_ID_Type i2cNo)
     CHECK_PARAM(IS_I2C_ID_TYPE(i2cNo));
 
     tmpVal = BL_RD_REG(I2Cx, I2C_FIFO_CONFIG_0);
-    tmpVal = BL_CLR_REG_BIT(tmpVal, I2C_TX_FIFO_CLR);
-    tmpVal = BL_CLR_REG_BIT(tmpVal, I2C_RX_FIFO_CLR);
+    tmpVal = BL_SET_REG_BIT(tmpVal, I2C_TX_FIFO_CLR);
+    tmpVal = BL_SET_REG_BIT(tmpVal, I2C_RX_FIFO_CLR);
     BL_WR_REG(I2Cx, I2C_FIFO_CONFIG_0, tmpVal);
 
     tmpVal = BL_RD_REG(I2Cx, I2C_CONFIG);
@@ -231,10 +232,35 @@ void I2C_Disable(I2C_ID_Type i2cNo)
     tmpVal = BL_CLR_REG_BIT(tmpVal, I2C_CR_I2C_M_EN);
     BL_WR_REG(I2Cx, I2C_CONFIG, tmpVal);
 
+    /* Clear I2C fifo */
     tmpVal = BL_RD_REG(I2Cx, I2C_FIFO_CONFIG_0);
-    tmpVal = BL_CLR_REG_BIT(tmpVal, I2C_TX_FIFO_CLR);
-    tmpVal = BL_CLR_REG_BIT(tmpVal, I2C_RX_FIFO_CLR);
+    tmpVal = BL_SET_REG_BIT(tmpVal, I2C_TX_FIFO_CLR);
+    tmpVal = BL_SET_REG_BIT(tmpVal, I2C_RX_FIFO_CLR);
     BL_WR_REG(I2Cx, I2C_FIFO_CONFIG_0, tmpVal);
+
+    /* Clear I2C interrupt status */
+    tmpVal = BL_RD_REG(I2Cx, I2C_INT_STS);
+    tmpVal = BL_SET_REG_BIT(tmpVal, I2C_CR_I2C_END_CLR);
+    tmpVal = BL_SET_REG_BIT(tmpVal, I2C_CR_I2C_NAK_CLR);
+    tmpVal = BL_SET_REG_BIT(tmpVal, I2C_CR_I2C_ARB_CLR);
+    BL_WR_REG(I2Cx, I2C_INT_STS, tmpVal);
+}
+
+/****************************************************************************//**
+ * @brief  I2C set global reset function
+ *
+ * @param  i2cNo: I2C ID type
+ *
+ * @return SUCCESS or ERROR
+ *
+*******************************************************************************/
+BL_Err_Type I2C_Reset(I2C_ID_Type i2cNo)
+{
+    /* Check the parameters */
+    CHECK_PARAM(IS_I2C_ID_TYPE(i2cNo));
+
+    GLB_AHB_Slave1_Reset(BL_AHB_SLAVE1_I2C);
+    return SUCCESS;
 }
 
 /****************************************************************************//**
@@ -274,6 +300,10 @@ void I2C_Init(I2C_ID_Type i2cNo, I2C_Direction_Type direct, I2C_Transfer_Cfg *cf
 
     /* Set sub address */
     BL_WR_REG(I2Cx, I2C_SUB_ADDR, cfg->subAddr);
+
+#ifndef BFLB_USE_HAL_DRIVER
+    //Interrupt_Handler_Register(I2C_IRQn,I2C_IRQHandler);
+#endif
 }
 
 /****************************************************************************//**
@@ -315,6 +345,64 @@ void I2C_SetPrd(I2C_ID_Type i2cNo, uint8_t phase)
 }
 
 /****************************************************************************//**
+ * @brief  I2C set scl output clock
+ *
+ * @param  i2cNo: I2C ID type
+ * @param  clk: Clock set
+ *
+ * @return None
+ *
+*******************************************************************************/
+void I2C_ClockSet(I2C_ID_Type i2cNo, uint32_t clk)
+{
+    uint8_t bclkDiv = 0;
+
+    /* Check the parameters */
+    CHECK_PARAM(IS_I2C_ID_TYPE(i2cNo));
+
+    bclkDiv = GLB_Get_BCLK_Div();
+    if(clk >= 100000){
+        GLB_Set_I2C_CLK(1, 0);
+        I2C_SetPrd(i2cNo, (SystemCoreClockGet()/(bclkDiv+1)) / (clk*4)-1);
+    }else if(clk >= 8000){
+        GLB_Set_I2C_CLK(1, 9);
+        I2C_SetPrd(i2cNo, ((SystemCoreClockGet()/(bclkDiv+1))/10) / (clk*4)-1);
+    }else if(clk >= 800){
+        GLB_Set_I2C_CLK(1, 99);
+        I2C_SetPrd(i2cNo, ((SystemCoreClockGet()/(bclkDiv+1))/100) / (clk*4)-1);
+    }else{
+        GLB_Set_I2C_CLK(1, 255);
+        I2C_SetPrd(i2cNo, ((SystemCoreClockGet()/(bclkDiv+1))/256) / (clk*4)-1);
+    }
+}
+
+/****************************************************************************//**
+ * @brief  I2C set scl sync
+ *
+ * @param  i2cNo: I2C ID type
+ * @param  enable: Enable or disable I2C scl sync
+ *
+ * @return None
+ *
+*******************************************************************************/
+void I2C_SetSclSync(I2C_ID_Type i2cNo, uint8_t enable)
+{
+    uint32_t tmpVal;
+    uint32_t I2Cx = I2C_BASE;
+
+    /* Check the parameters */
+    CHECK_PARAM(IS_I2C_ID_TYPE(i2cNo));
+
+    tmpVal = BL_RD_REG(I2Cx, I2C_CONFIG);
+    if(enable){
+        tmpVal = BL_SET_REG_BIT(tmpVal, I2C_CR_I2C_SCL_SYNC_EN);
+    }else{
+        tmpVal = BL_CLR_REG_BIT(tmpVal, I2C_CR_I2C_SCL_SYNC_EN);
+    }
+    BL_WR_REG(I2Cx, I2C_CONFIG, tmpVal);
+}
+
+/****************************************************************************//**
  * @brief  Get i2c busy state
  *
  * @param  i2cNo: I2C ID type
@@ -332,6 +420,26 @@ BL_Sts_Type I2C_IsBusy(I2C_ID_Type i2cNo)
 
     tmpVal = BL_RD_REG(I2Cx, I2C_BUS_BUSY);
     return ((BL_IS_REG_BIT_SET(tmpVal, I2C_STS_I2C_BUS_BUSY)) ? SET: RESET);
+}
+
+/****************************************************************************//**
+ * @brief  Get i2c transfer end state
+ *
+ * @param  i2cNo: I2C ID type
+ *
+ * @return RESET or SET
+ *
+*******************************************************************************/
+BL_Sts_Type I2C_TransferEndStatus(I2C_ID_Type i2cNo)
+{
+    uint32_t tmpVal;
+    uint32_t I2Cx = I2C_BASE;
+
+    /* Check the parameters */
+    CHECK_PARAM(IS_I2C_ID_TYPE(i2cNo));
+
+    tmpVal = BL_RD_REG(I2Cx, I2C_INT_STS);
+    return ((BL_IS_REG_BIT_SET(tmpVal, I2C_END_INT)) ? SET: RESET);
 }
 
 /****************************************************************************//**
@@ -386,7 +494,7 @@ BL_Err_Type I2C_MasterSendBlocking(I2C_ID_Type i2cNo, I2C_Transfer_Cfg *cfg)
     }
 
     timeOut = I2C_FIFO_STATUS_TIMEOUT;
-    while(I2C_IsBusy(i2cNo)){
+    while(I2C_IsBusy(i2cNo) || !I2C_TransferEndStatus(i2cNo)){
         timeOut--;
         if(timeOut == 0){
             I2C_Disable(i2cNo);
@@ -453,7 +561,7 @@ BL_Err_Type I2C_MasterReceiveBlocking(I2C_ID_Type i2cNo, I2C_Transfer_Cfg *cfg)
     }
 
     timeOut = I2C_FIFO_STATUS_TIMEOUT;
-    while(I2C_IsBusy(i2cNo)){
+    while(I2C_IsBusy(i2cNo) || !I2C_TransferEndStatus(i2cNo)){
         timeOut--;
         if(timeOut == 0){
             I2C_Disable(i2cNo);
@@ -643,7 +751,7 @@ void I2C_Int_Callback_Install(I2C_ID_Type i2cNo, I2C_INT_Type intType, intCallba
  *
 *******************************************************************************/
 #ifndef BL602_USE_HAL_DRIVER
-void __IRQ I2C_IRQHandler(void)
+void I2C_IRQHandler(void)
 {
     I2C_IntHandler(I2C0_ID);
 }

@@ -15,6 +15,14 @@
 #define ARP_QUEUEING            0
 #define LWIP_NETIF_API          1
 
+#define LWIP_MDNS_RESPONDER     1
+#define LWIP_IGMP               1
+//#define LWIP_AUTOIP             1
+////#define LWIP_IPV6_MLD           1
+#define LWIP_NUM_NETIF_CLIENT_DATA      1
+
+#define LWIP_ALTCP                      1
+#define LWIP_ALTCP_TLS                  1
 /**
  * NO_SYS==1: Provides VERY minimal functionality. Otherwise,
  * use lwIP facilities.
@@ -22,6 +30,8 @@
 #define NO_SYS                  0
 
 #define LWIP_TIMEVAL_PRIVATE    0
+
+#define LWIP_HAVE_LOOPIF           1
 
 /**
  * LWIP_TCPIP_CORE_LOCKING_INPUT: when LWIP_TCPIP_CORE_LOCKING is enabled,
@@ -31,7 +41,7 @@
  * ATTENTION: this does not work when tcpip_input() is called from
  * interrupt context!
  */
-#define LWIP_TCPIP_CORE_LOCKING_INPUT   1
+#define LWIP_TCPIP_CORE_LOCKING_INPUT   0
 
 /* ---------- Memory options ---------- */
 /* MEM_ALIGNMENT: should be set to the alignment of the CPU for which
@@ -60,11 +70,16 @@ a lot of data that needs to be copied, this should be set high. */
    segments. */
 #define MEMP_NUM_TCP_SEG        32
 
+/* NUM of sys_timeout pool*/
+#define MEMP_NUM_SYS_TIMEOUT            (LWIP_NUM_SYS_TIMEOUT_INTERNAL + 8 + 3)
+
 #define MEMP_NUM_NETCONN    (MEMP_NUM_TCP_PCB + MEMP_NUM_UDP_PCB + MEMP_NUM_TCP_PCB_LISTEN) 
 
 /* ---------- Pbuf options ---------- */
 /* PBUF_POOL_SIZE: the number of buffers in the pbuf pool. */
+#if !defined PBUF_POOL_SIZE
 #define PBUF_POOL_SIZE          0
+#endif
 
 /* PBUF_POOL_BUFSIZE: the size of each pbuf in the pbuf pool. */
 #define PBUF_POOL_BUFSIZE       760
@@ -79,12 +94,12 @@ a lot of data that needs to be copied, this should be set high. */
 #define TCP_QUEUE_OOSEQ         1
 
 /* TCP Maximum segment size. */
-//#define TCP_MSS                 (1500 - 40)	  /* TCP_MSS = (Ethernet MTU - IP header size - TCP header size) */
+#define TCP_MSS                 (1500 - 40)	  /* TCP_MSS = (Ethernet MTU - IP header size - TCP header size) */
 //#define TCP_MSS                 (1500 - 80)	  /* TCP_MSS = (Ethernet MTU - IP header size - TCP header size) */
-#define TCP_MSS                 (800 - 40 - 80 + 8)	  /* TCP_MSS = (Ethernet MTU - IP header size - TCP header size) */
+//#define TCP_MSS                 (800 - 40 - 80 + 8)	  /* TCP_MSS = (Ethernet MTU - IP header size - TCP header size) */
 
 /* TCP sender buffer space (bytes). */
-#define TCP_SND_BUF             (8*TCP_MSS)
+#define TCP_SND_BUF             (3*TCP_MSS)
 
 /*  TCP_SND_QUEUELEN: TCP sender buffer space (pbufs). This must be at least
   as much as (2 * TCP_SND_BUF/TCP_MSS) for things to work. */
@@ -108,6 +123,11 @@ a lot of data that needs to be copied, this should be set high. */
  * explicit window update
  */
 #define TCP_WND_UPDATE_THRESHOLD   LWIP_MIN((TCP_WND / 2), (TCP_MSS * 6))
+
+/**
+ * By default, TCP socket/netconn close waits 20 seconds max to send the FIN
+ */
+#define LWIP_TCP_CLOSE_TIMEOUT_MS_DEFAULT 5000
 
 /**
  * LWIP_SO_SNDTIMEO==1: Enable send timeout for sockets/netconns and
@@ -138,7 +158,7 @@ a lot of data that needs to be copied, this should be set high. */
 
 
 /* ---------- Statistics options ---------- */
-#define LWIP_STATS 0
+#define LWIP_STATS 1
 #define LWIP_PROVIDE_ERRNO 1
 
 /* ---------- link callback options ---------- */
@@ -233,10 +253,10 @@ a lot of data that needs to be copied, this should be set high. */
 #define DEFAULT_TCP_RECVMBOX_SIZE       2000
 #define DEFAULT_ACCEPTMBOX_SIZE         2000
 #define DEFAULT_THREAD_STACKSIZE        500
-#define TCPIP_THREAD_PRIO               (configMAX_PRIORITIES - 3) 
+#define TCPIP_THREAD_PRIO               (configMAX_PRIORITIES - 2) 
 
 #define LWIP_COMPAT_MUTEX               0
-#define LWIP_TCPIP_CORE_LOCKING         1
+#define LWIP_TCPIP_CORE_LOCKING         0
 #define LWIP_SOCKET_SET_ERRNO           1
 #define SO_REUSE                        1
 #define LWIP_TCP_KEEPALIVE              1
@@ -253,6 +273,7 @@ a lot of data that needs to be copied, this should be set high. */
 
 #define PBUF_LINK_ENCAPSULATION_HLEN    128u
 
+#define LWIP_RAW                        1
 
 /*
    ---------------------------------

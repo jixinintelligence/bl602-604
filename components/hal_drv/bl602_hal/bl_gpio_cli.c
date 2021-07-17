@@ -33,12 +33,15 @@
 
 #include "bl_gpio.h"
 
+#include <blog.h>
+#define USER_UNUSED(a) ((void)(a))
+
 static void cmd_gpio_func(char *buf, int len, int argc, char **argv) 
 {
     int ionum = -1, inputmode = -1, pullup = -1, pulldown = -1;
 
     if (5 != argc) {
-        printf("Usage: %s 24 1 1 0\r\n  set GPIO24 to input with pullup\r\n",
+        blog_info("Usage: %s 24 1 1 0\r\n  set GPIO24 to input with pullup\r\n",
                 argv[0]
         );
         return;
@@ -48,10 +51,10 @@ static void cmd_gpio_func(char *buf, int len, int argc, char **argv)
     pullup = atoi(argv[3]);
     pulldown = atoi(argv[4]);
     if (ionum < 0 || inputmode < 0 || pullup < 0 || pulldown < 0) {
-        puts("Illegal arg\r\n");
+        blog_error("Illegal arg\r\n");
         return;
     }
-    printf("GPIO%d is set %s with %s pullup %s pulldown\r\n",
+    blog_info("GPIO%d is set %s with %s pullup %s pulldown\r\n",
             ionum,
             inputmode ? "input" : "output",
             pullup ? "Active" : "null",
@@ -69,7 +72,7 @@ static void cmd_gpio_set(char *buf, int len, int argc, char **argv)
     int ionum = -1, val = -1;
 
     if  (3 != argc) {
-        printf("Usage: %s 24 1\r\n  set GPIO24 output to high\r\n",
+        blog_info("Usage: %s 24 1\r\n  set GPIO24 output to high\r\n",
                 argv[0]
         );
         return;
@@ -77,10 +80,10 @@ static void cmd_gpio_set(char *buf, int len, int argc, char **argv)
     ionum = atoi(argv[1]);
     val = atoi(argv[2]);
     if (ionum < 0 || val < 0) {
-        puts("Illegal arg\r\n");
+        blog_error("Illegal arg\r\n");
         return;
     }
-    printf("GPIO%d is set to %s\r\n",
+    blog_info("GPIO%d is set to %s\r\n",
         ionum,
         val ? "high" : "lo"
     );
@@ -92,8 +95,9 @@ static void cmd_gpio_get(char *buf, int len, int argc, char **argv)
     int ionum = -1, ret;
     uint8_t val;
 
+    USER_UNUSED(ret);
     if  (2 != argc) {
-        printf("Usage: %s 24\r\n  get GPIO24 value\r\n",
+        blog_info("Usage: %s 24\r\n  get GPIO24 value\r\n",
                 argv[0]
         );
         return;
@@ -104,7 +108,7 @@ static void cmd_gpio_get(char *buf, int len, int argc, char **argv)
         return;
     }
     ret = bl_gpio_input_get(ionum, &val);
-    printf("GPIO%d val is %s\r\n",
+    blog_info("GPIO%d val is %s\r\n",
         ionum,
         0 == ret ? (val ? "high" : "low") : "Err"
     );

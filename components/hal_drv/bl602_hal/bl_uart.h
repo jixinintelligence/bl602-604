@@ -51,7 +51,10 @@ void bl_uart_setbaud(uint8_t id, uint32_t baud);
 int bl_uart_data_send(uint8_t id, uint8_t data);
 int bl_uart_datas_send(uint8_t id, uint8_t *data, int len);
 int bl_uart_data_recv(uint8_t id);
-int bl_uart_int_enable(uint8_t id, uint8_t *rx_buffer, uint8_t *rx_idx_write, uint8_t *rx_idx_read, uint8_t *tx_buffer, uint8_t *tx_idx_write, uint8_t *tx_idx_read);
-int bl_uart_int_cb_notify_register(uint8_t id, cb_uart_notify_t cb, void *arg);
-int bl_uart_int_cb_notify_unregister(uint8_t id, cb_uart_notify_t cb, void *arg);
+int bl_uart_int_enable(uint8_t id);
+int bl_uart_int_disable(uint8_t id);
+int bl_uart_int_rx_notify_register(uint8_t id, cb_uart_notify_t cb, void *arg);
+int bl_uart_int_tx_notify_register(uint8_t id, cb_uart_notify_t cb, void *arg);
+int bl_uart_int_rx_notify_unregister(uint8_t id, cb_uart_notify_t cb, void *arg);
+int bl_uart_int_tx_notify_unregister(uint8_t id, cb_uart_notify_t cb, void *arg);
 #endif

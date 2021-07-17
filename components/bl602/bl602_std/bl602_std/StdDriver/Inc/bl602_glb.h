@@ -82,13 +82,6 @@ typedef enum {
 }GLB_SYS_CLK_Type;
 
 /**
- *  @brief GLB SOC clock type definition
- */
-typedef enum {
-    GLB_SOC_CLK_CORE_CLK_DIV,               /*!< select CORE clock after core_clk_div as SOC clock */
-}GLB_SOC_CLK_Type;
-
-/**
  *  @brief GLB DMA clock ID type definition
  */
 typedef enum {
@@ -116,14 +109,6 @@ typedef enum {
     GLB_SFLASH_CLK_BCLK,                    /*!< Select BCLK as flash clock */
     GLB_SFLASH_CLK_96M,                     /*!< Select 96M as flash clock */
 }GLB_SFLASH_CLK_Type;
-
-/**
- *  @brief GLB UART clock type definition
- */
-typedef enum {
-    GLB_UART_CLK_FCLK,                      /*!< Select fclk as UART clock */
-    GLB_UART_CLK_PLL160M,                   /*!< Select PLL 160M as UART clock */
-}GLB_UART_CLK_Type;
 
 /**
  *  @brief GLB SPI pad action type definition
@@ -196,7 +181,7 @@ typedef enum {
  *  @brief GLB RTC clock type definition
  */
 typedef enum {
-    GLB_MTIMER_CLK_CPU_CLK,                 /*!< CPU clock */
+    GLB_MTIMER_CLK_BCLK,                    /*!< BUS clock */
     GLB_MTIMER_CLK_32K,                     /*!< 32KHz */
 }GLB_MTIMER_CLK_Type;
 
@@ -368,11 +353,6 @@ typedef struct {
                                                           ((type) == GLB_SYS_CLK_PLL160M) || \
                                                           ((type) == GLB_SYS_CLK_PLL192M))
 
-/** @defgroup  GLB_SOC_CLK_TYPE
- *  @{
- */
-#define IS_GLB_SOC_CLK_TYPE(type)                        (((type) == GLB_SOC_CLK_CORE_CLK_DIV))
-
 /** @defgroup  GLB_DMA_CLK_ID_TYPE
  *  @{
  */
@@ -395,12 +375,6 @@ typedef struct {
                                                           ((type) == GLB_SFLASH_CLK_80M) || \
                                                           ((type) == GLB_SFLASH_CLK_BCLK) || \
                                                           ((type) == GLB_SFLASH_CLK_96M))
-
-/** @defgroup  GLB_UART_CLK_TYPE
- *  @{
- */
-#define IS_GLB_UART_CLK_TYPE(type)                       (((type) == GLB_UART_CLK_FCLK) || \
-                                                          ((type) == GLB_UART_CLK_PLL160M))
 
 /** @defgroup  GLB_SPI_PAD_ACT_AS_TYPE
  *  @{
@@ -449,7 +423,7 @@ typedef struct {
 /** @defgroup  GLB_MTIMER_CLK_TYPE
  *  @{
  */
-#define IS_GLB_MTIMER_CLK_TYPE(type)                     (((type) == GLB_MTIMER_CLK_CPU_CLK) || \
+#define IS_GLB_MTIMER_CLK_TYPE(type)                     (((type) == GLB_MTIMER_CLK_BCLK) || \
                                                           ((type) == GLB_MTIMER_CLK_32K))
 
 /** @defgroup  GLB_ADC_CLK_TYPE
@@ -634,6 +608,7 @@ BL_Err_Type GLB_Swap_Flash_Pin(void);
 BL_Err_Type GLB_Set_MTimer_CLK(uint8_t enable,GLB_MTIMER_CLK_Type clkSel,uint32_t div);
 /*----------*/
 BL_Err_Type GLB_Set_ADC_CLK(uint8_t enable,GLB_ADC_CLK_Type clkSel,uint8_t div);
+BL_Err_Type GLB_Set_DAC_CLK(uint8_t enable,GLB_DAC_CLK_Type clkSel,uint8_t div);
 /*----------*/
 BL_Err_Type GLB_Platform_Wakeup_Enable(void);
 BL_Err_Type GLB_Platform_Wakeup_Disable(void);
@@ -653,11 +628,13 @@ BL_Err_Type GLB_IR_LED_Driver_Disable(void);
 BL_Err_Type GLB_IR_LED_Driver_Ibias(uint8_t ibias);
 /*----------*/
 BL_Err_Type GLB_GPIO_Init(GLB_GPIO_Cfg_Type *cfg);
-BL_Err_Type GLB_GPIO_Func_Init(uint8_t gpioFun,GLB_GPIO_Type *pinList,uint8_t cnt);
+BL_Err_Type GLB_GPIO_Func_Init(GLB_GPIO_FUNC_Type gpioFun,GLB_GPIO_Type *pinList,uint8_t cnt);
 BL_Err_Type GLB_GPIO_INPUT_Enable(GLB_GPIO_Type gpioPin);
 BL_Err_Type GLB_GPIO_INPUT_Disable(GLB_GPIO_Type gpioPin);
 BL_Err_Type GLB_GPIO_OUTPUT_Enable(GLB_GPIO_Type gpioPin);
 BL_Err_Type GLB_GPIO_OUTPUT_Disable(GLB_GPIO_Type gpioPin);
+BL_Err_Type GLB_GPIO_Set_PullUp(GLB_GPIO_Type gpioPin);
+BL_Err_Type GLB_GPIO_Set_PullDown(GLB_GPIO_Type gpioPin);
 BL_Err_Type GLB_GPIO_Set_HZ(GLB_GPIO_Type gpioPin);
 uint8_t GLB_GPIO_Get_Fun(GLB_GPIO_Type gpioPin);
 GLB_GPIO_REAL_MODE_Type GLB_GPIO_Get_Real_Fun(GLB_GPIO_Type gpioPin);
@@ -670,9 +647,8 @@ BL_Err_Type GLB_Clr_GPIO_IntStatus(GLB_GPIO_Type gpioPin);
 BL_Err_Type GLB_Set_GPIO_IntMod(GLB_GPIO_Type gpioPin,GLB_GPIO_INT_CONTROL_Type intCtlMod,
                                 GLB_GPIO_INT_TRIG_Type intTrgMod);
 GLB_GPIO_INT_CONTROL_Type GLB_Get_GPIO_IntCtlMod(GLB_GPIO_Type gpioPin);
+BL_Err_Type GLB_GPIO_INT0_IRQHandler_Install(void);
 BL_Err_Type GLB_GPIO_INT0_Callback_Install(GLB_GPIO_Type gpioPin,intCallback_Type* cbFun);
-void GPIO_INT0_IRQHandler(void);
-BL_Err_Type GLB_Set_DAC_CLK(uint8_t enable,GLB_DAC_CLK_Type clkSel,uint8_t div);
 
 /*@} end of group GLB_Public_Functions */
 

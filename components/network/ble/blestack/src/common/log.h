@@ -1,32 +1,3 @@
-/*
- * Copyright (c) 2020 Bouffalolab.
- *
- * This file is part of
- *     *** Bouffalolab Software Dev Kit ***
- *      (see www.bouffalolab.com).
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *   1. Redistributions of source code must retain the above copyright notice,
- *      this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright notice,
- *      this list of conditions and the following disclaimer in the documentation
- *      and/or other materials provided with the distribution.
- *   3. Neither the name of Bouffalo Lab nor the names of its contributors
- *      may be used to endorse or promote products derived from this software
- *      without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 /** @file
  *  @brief Bluetooth subsystem logging helpers.
  */
@@ -45,9 +16,6 @@
 #include <bluetooth.h>
 #include <hci_host.h>
 
-#if defined(BL70X)
-#include "bl_print.h"
-#endif
 #include "FreeRTOS.h"
 #include "task.h"
 #include "FreeRTOSConfig.h"
@@ -69,50 +37,21 @@ extern "C" {
 //LOG_MODULE_REGISTER(LOG_MODULE_NAME, LOG_LEVEL);
 
 #if defined(BFLB_BLE)
-//#if defined(CFG_BLE_STACK_DBG_PRINT)
-#define BT_DBG(fmt, ...)
-#if defined(BL70X)
-#define BT_ERR(fmt, ...)   bl_print(SYSTEM_UART_ID, PRINT_MODULE_BLE_STACK, fmt"\r\n", ##__VA_ARGS__)
-#elif defined(BL602) || defined(BL702)
-#define BT_ERR(fmt, ...)   printf(fmt"\r\n", ##__VA_ARGS__)
-#if defined(CONFIG_BT_STACK_PTS)
-#define BT_STACK_PTS_DBG(fmt, ...)  printf(fmt"\r\n", ##__VA_ARGS__)
+
+#define BT_DBG(fmt, ...)    //printf(fmt", %s\r\n", ##__VA_ARGS__, __func__)
+#define BT_ERR(fmt, ...)   printf(fmt", %s\r\n", ##__VA_ARGS__, __func__)
+#if defined(CONFIG_BT_STACK_PTS) || defined(CONFIG_BT_MESH_PTS)
+#define BT_PTS(fmt, ...)   printf(fmt"\r\n", ##__VA_ARGS__)
 #endif
-//#endif
-#define BT_WARN(fmt, ...) 
-#define BT_INFO(fmt, ...)
-#else
-#define BT_DBG(fmt, ...)
-#define BT_ERR(fmt, ...)
-#define BT_WARN(fmt, ...)
-#define BT_INFO(fmt, ...)
+#define BT_WARN(fmt, ...)  printf(fmt", %s\r\n", ##__VA_ARGS__, __func__)
+#define BT_INFO(fmt, ...)   //printf(fmt", %s\r\n", ##__VA_ARGS__, __func__)
 
+#else /*BFLB_BLE*/
 
-#endif /*CFG_BLE_STACK_DBG_PRINT*/
-
-#if defined(CONFIG_BT_STACK_PTS)
-#define BT_STACK_PTS_SDBG(str, len, reversal) \
-{	\
-	BT_STACK_PTS_DBG("uuid = [");	\
-	u8_t i = 0; \
-	for(i=0;i<len;i++){	\
-		if(reversal)	\
-			BT_STACK_PTS_DBG("%02x", str[len-1-i]); \
-		else	\
-			BT_STACK_PTS_DBG("%02x", str[i]);	\
-	}	\
-	BT_STACK_PTS_DBG("]\r\n");\
-}
-
-#endif 
-
-#else
 #define BT_DBG(fmt, ...) LOG_DBG(fmt, ##__VA_ARGS__)
 #define BT_ERR(fmt, ...) LOG_ERR(fmt, ##__VA_ARGS__)
 #define BT_WARN(fmt, ...) LOG_WRN(fmt, ##__VA_ARGS__)
 #define BT_INFO(fmt, ...) LOG_INF(fmt, ##__VA_ARGS__)
-
-
 
 #if defined(CONFIG_BT_ASSERT_VERBOSE)
 #define BT_ASSERT_PRINT(fmt, ...) printk(fmt, ##__VA_ARGS__)
@@ -125,6 +64,7 @@ extern "C" {
 #else
 #define BT_ASSERT_DIE k_oops
 #endif /* CONFIG_BT_ASSERT_PANIC */
+
 #endif /*BFLB_BLE*/
 
 #if defined(CONFIG_BT_ASSERT)

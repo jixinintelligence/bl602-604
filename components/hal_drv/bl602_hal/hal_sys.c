@@ -38,6 +38,11 @@ void hal_reboot()
     bl_sys_reset_por();
 }
 
+void hal_sys_reset()
+{
+    bl_sys_reset_system();
+}
+
 void hal_poweroff()
 {
     /*TODO empty now*/

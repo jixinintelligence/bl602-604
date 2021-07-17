@@ -44,7 +44,7 @@
 /* every line log's buffer */
 static char log_buf[BLOG_LINE_BUF_SIZE] = { 0 };
 
-static int findch_sum(char *str, char ch)
+static int findch_sum(const char *str, char ch)
 {
     int i = 0;
     int len = strlen(str);
@@ -80,7 +80,7 @@ static int set_level(int argc, char **argv)
     int ch_sum;
 
     if (argc != 3) {
-        printf("arg error.\r\n");
+        __blog_printf("arg error.\r\n");
         return -1;
     }
 
@@ -100,7 +100,7 @@ static int set_level(int argc, char **argv)
     } else if (0 == strcmp(argv[1], "never")) {
         level = BLOG_LEVEL_NEVER;
     } else {
-        printf("input level = %s not support.\r\n", argv[1]);
+        __blog_printf("input level = %s not support.\r\n", argv[1]);
         return -1;
     }
 
@@ -117,7 +117,7 @@ static int set_level(int argc, char **argv)
         start = (blog_info_t *)(&_ld_bl_static_blogpri_code_start);
         end = (blog_info_t *)(&_ld_bl_static_blogpri_code_end);
     } else {
-        printf("input name = %s not support.\r\n", argv[2]);
+        __blog_printf("input name = %s not support.\r\n", argv[2]);
         return -1;
     }
 
@@ -137,20 +137,20 @@ static int set_level(int argc, char **argv)
     }
 
     if (left > right) {
-        printf("input name = %s not find.\r\n", argv[2]);
+        __blog_printf("input name = %s not find.\r\n", argv[2]);
         return -1;
     }
 
     /* set level */
     *(info->level) = level;
-    printf("set %s = %d\r\n", info->name, *(info->level));
+    __blog_printf("set %s = %d\r\n", info->name, *(info->level));
     return 0;
 }
 
 void cmd_blog_set_level(char *buf, int len, int argc, char **argv)
 {
     if (0 != set_level(argc, argv)) {
-        printf("set blog error.\r\n");
+        __blog_printf("set blog error.\r\n");
     }
 }
 
@@ -166,14 +166,14 @@ void cmd_blog_info_dump(char *buf, int len, int argc, char **argv)
     extern char _ld_bl_static_blogpri_code_start;
     extern char _ld_bl_static_blogpri_code_end;
 
-    printf("blog code1 = %p - %p\r\n", &_ld_bl_static_blogcomponent_code_start, &_ld_bl_static_blogcomponent_code_end);
-    printf("blog code2 = %p - %p\r\n", &_ld_bl_static_blogfile_code_start, &_ld_bl_static_blogfile_code_end);
-    printf("blog code3 = %p - %p\r\n", &_ld_bl_static_blogpri_code_start, &_ld_bl_static_blogpri_code_end);
+    __blog_printf("blog code1 = %p - %p\r\n", &_ld_bl_static_blogcomponent_code_start, &_ld_bl_static_blogcomponent_code_end);
+    __blog_printf("blog code2 = %p - %p\r\n", &_ld_bl_static_blogfile_code_start, &_ld_bl_static_blogfile_code_end);
+    __blog_printf("blog code3 = %p - %p\r\n", &_ld_bl_static_blogpri_code_start, &_ld_bl_static_blogpri_code_end);
 
     for (info_c = (blog_info_t *)&_ld_bl_static_blogcomponent_code_start;
          (uint32_t)info_c < (uint32_t)&_ld_bl_static_blogcomponent_code_end; info_c++) {
         if (strlen(info_c->name) > BLOG_NAMELEN_MAX) {
-            printf("name too long.\r\n");
+            __blog_printf("name too long.\r\n");
             return;
         }
         if (name_buf[0] != 0) {
@@ -186,7 +186,7 @@ void cmd_blog_info_dump(char *buf, int len, int argc, char **argv)
             }
         }
         
-        printf("[%-48s] = [%d]\r\n", info_c->name, *(info_c->level));
+        __blog_printf("[%-48s] = [%d]\r\n", info_c->name, *(info_c->level));
         
         if ((name_buf[0] != 0) && (strcmp(info_c->name, name_buf) == 0)) {
             continue;
@@ -198,13 +198,13 @@ void cmd_blog_info_dump(char *buf, int len, int argc, char **argv)
 
             if (strstr(info_f->name, info_c->name) == info_f->name) {
 
-                printf("[%-48s] = [%d]\r\n", info_f->name, *(info_f->level));
+                __blog_printf("[%-48s] = [%d]\r\n", info_f->name, *(info_f->level));
 
                 for (info_p = (blog_info_t *)&_ld_bl_static_blogpri_code_start;
                     (uint32_t)info_p < (uint32_t)&_ld_bl_static_blogpri_code_end; info_p++) {
 
                     if (strstr(info_p->name, info_f->name) == info_p->name) {
-                        printf("[%-48s] = [%d]\r\n", info_p->name, *(info_p->level));
+                        __blog_printf("[%-48s] = [%d]\r\n", info_p->name, *(info_p->level));
                     }
                 }
             }
@@ -230,7 +230,7 @@ static void blog_set_poweron_softlevel(void)
     extern char _ld_bl_static_blogpri_code_start;
     extern char _ld_bl_static_blogpri_code_end;
 
-    printf("\r\nblog init set power on level %d, %d, %d.\r\n", BLOG_POWERON_SOFTLEVEL_COMPONENT,
+    __blog_printf("\r\nblog init set power on level %d, %d, %d.\r\n", BLOG_POWERON_SOFTLEVEL_COMPONENT,
             BLOG_POWERON_SOFTLEVEL_FILE, BLOG_POWERON_SOFTLEVEL_PRI);
     for ( info = (blog_info_t *)&_ld_bl_static_blogcomponent_code_start;
           (uint32_t)info < (uint32_t)&_ld_bl_static_blogcomponent_code_end; info++ ) {
@@ -256,7 +256,7 @@ static void blog_set_poweron_softlevel(void)
  */
 void blog_port_output(const char *log, size_t size) {
     /* output to terminal */
-    bl_printk("%.*s", size, log);
+    __blog_printf("%.*s", size, log);
     //TODO output to flash
 }
 
@@ -272,8 +272,8 @@ void blog_port_output(const char *log, size_t size) {
 size_t blog_strcpy(size_t cur_len, char *dst, const char *src) {
     const char *src_old = src;
 
-    if ((!src) || (!src)) {
-        printf("assert.\r\n");
+    if ((!dst) || (!src)) {
+        __blog_printf("assert.\r\n");
         return 0;
     }
 
@@ -295,7 +295,7 @@ size_t blog_strcpy(size_t cur_len, char *dst, const char *src) {
  * @param buf hex buffer
  * @param size buffer size
  */
-void blog_hexdump_out(const char *name, uint8_t width, uint8_t *buf, uint16_t size)
+void blog_hexdump_out(const char *name, uint8_t width, const uint8_t *buf, uint16_t size)
 {
 #define __is_print(ch)       ((unsigned int)((ch) - ' ') < 127u - ' ')
 

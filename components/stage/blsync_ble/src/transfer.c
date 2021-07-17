@@ -76,10 +76,12 @@ static int __pack_trans (pro_handle_t handle,
             __clear_dev(handle);
         }
 
-        handle->pyld_buf = __malloc(handle->total_length);
-        if (handle->pyld_buf == NULL) {
-            ret = -PRO_NO_MEM;
-            goto __end;
+        if (handle->total_length != 0) {
+            handle->pyld_buf = __malloc(handle->total_length);
+            if (handle->pyld_buf == NULL) {
+                ret = -PRO_NO_MEM;
+                goto __end;
+            }
         }
         encrypt_layer_is_head(handle->enc_handle, 1);
     } else {

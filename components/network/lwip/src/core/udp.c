@@ -1311,4 +1311,11 @@ udp_debug_print(struct udp_hdr *udphdr)
 }
 #endif /* UDP_DEBUG */
 
+#if LWIP_STATS
+struct udp_pcb *udp_get_pcbs(void)
+{
+  return udp_pcbs; 
+}
+#endif
+
 #endif /* LWIP_UDP */

@@ -88,6 +88,7 @@
  * @return SUCCESS or ERROR
  *
 *******************************************************************************/
+#ifndef BL602_USE_ROM_DRIVER
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION XIP_SFlash_State_Save(SPI_Flash_Cfg_Type *pFlashCfg,uint32_t *offset)
 {
@@ -318,9 +319,14 @@ BL_Err_Type ATTR_TCM_SECTION XIP_SFlash_GetUniqueId_Need_Lock(SPI_Flash_Cfg_Type
 __WEAK
 BL_Err_Type ATTR_TCM_SECTION XIP_SFlash_Read_Via_Cache_Need_Lock(uint32_t addr,uint8_t *data, uint32_t len)
 {
+    uint32_t offset;
+
     if(addr>=BL602_FLASH_XIP_BASE && addr<BL602_FLASH_XIP_END){
+        offset=SF_Ctrl_Get_Flash_Image_Offset();
+        SF_Ctrl_Set_Flash_Image_Offset(0);
         /* Flash read */
-        BL602_MemCpy_Fast(data,(void *)(addr-SF_Ctrl_Get_Flash_Image_Offset()),len);
+        BL602_MemCpy_Fast(data,(void *)(addr),len);
+        SF_Ctrl_Set_Flash_Image_Offset(offset);
     }
 
     return SUCCESS;
@@ -384,6 +390,40 @@ int ATTR_TCM_SECTION XIP_SFlash_Erase_With_Lock(SPI_Flash_Cfg_Type *pFlashCfg,ui
     __enable_irq();
     return 0;
 }
+
+/****************************************************************************//**
+ * @brief  XIP SFlash option save
+ *
+ * @param  aesEnable: AES enable status pointer
+ *
+ * @return None
+ *
+*******************************************************************************/
+__WEAK
+void ATTR_TCM_SECTION XIP_SFlash_Opt_Enter(uint8_t *aesEnable)
+{
+    *aesEnable=SF_Ctrl_Is_AES_Enable();
+    if(*aesEnable){
+        SF_Ctrl_AES_Disable();
+    }
+}
+
+/****************************************************************************//**
+ * @brief  XIP SFlash option restore
+ *
+ * @param  aesEnable: AES enable status
+ *
+ * @return None
+ *
+*******************************************************************************/
+__WEAK
+void ATTR_TCM_SECTION XIP_SFlash_Opt_Exit(uint8_t aesEnable)
+{
+    if(aesEnable){
+        SF_Ctrl_AES_Enable();
+    }
+}
+#endif
 
 /*@} end of group XIP_SFLASH_Public_Functions */
 

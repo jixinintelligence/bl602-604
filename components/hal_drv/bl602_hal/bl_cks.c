@@ -36,6 +36,8 @@
 
 #include "bl_dma.h"
 #include "bl_cks.h"
+#include <blog.h>
+#define USER_UNUSED(a) ((void)(a))
 
 static void _bl_cks_test_case1()
 {
@@ -51,13 +53,15 @@ static void _bl_cks_test_case1()
     };
     int i;
     uint16_t cks;
+    USER_UNUSED(cks);
+    USER_UNUSED(data_src1_cks);
 
     *(volatile uint8_t*)0x4000A700 = 0x1;//REST
     for (i = 0; i < sizeof(data_src1); i++) {
         *(volatile uint8_t*)0x4000A704 = data_src1[i];
     }
     cks = *(volatile uint16_t*)0x4000A708;
-    printf("CKS result with LE is %04x, should be %02x%02x\r\n", cks, data_src1_cks[1], data_src1_cks[0]);
+    blog_info("CKS result with LE is %04x, should be %02x%02x\r\n", cks, data_src1_cks[1], data_src1_cks[0]);
 
     *(volatile uint8_t*)0x4000A700 = 0x1;//REST
     *(volatile uint8_t*)0x4000A700 = 0x2;//BIG Endian
@@ -65,7 +69,7 @@ static void _bl_cks_test_case1()
         *(volatile uint8_t*)0x4000A704 = data_src1[i];
     }
     cks = *(volatile uint16_t*)0x4000A708;
-    printf("CKS result with BE is %04x, should be %02x%02x\r\n", cks, data_src1_cks[1], data_src1_cks[0]);
+    blog_info("CKS result with BE is %04x, should be %02x%02x\r\n", cks, data_src1_cks[1], data_src1_cks[0]);
 }
 
 static void _bl_cks_test_case2()
@@ -87,7 +91,7 @@ static void _bl_cks_test_case2()
     }
 
     cks = *(volatile uint16_t*)0x4000A708;
-    printf("CKS LE result is %04x, %04x\r\n",
+    blog_info("CKS LE result is %04x, %04x\r\n",
             cks,
             (uint16_t)~checksum
     );
@@ -105,14 +109,14 @@ static void _bl_cks_test_case2()
     }
 
     cks = *(volatile uint16_t*)0x4000A708;
-    printf("CKS BE result is %04x, %04x\r\n",
+    blog_info("CKS BE result is %04x, %04x\r\n",
             cks,
             (uint16_t)~checksum
     );
     if (cks == ((uint16_t)~checksum)) {
-        printf("====== Success %04X Checksum=====\r\n", cks);
+        blog_info("====== Success %04X Checksum=====\r\n", cks);
     } else {
-        printf("====== Failed %04X Checksum======\r\n", cks);
+        blog_info("====== Failed %04X Checksum======\r\n", cks);
     }
 }
 
@@ -135,7 +139,7 @@ static void _bl_cks_test_case3()
     }
 
     cks = *(volatile uint16_t*)0x4000A708;
-    printf("CKS LE result is %04x, %04x\r\n",
+    blog_info("CKS LE result is %04x, %04x\r\n",
             cks,
             (uint16_t)~checksum
     );
@@ -153,14 +157,14 @@ static void _bl_cks_test_case3()
     }
 
     cks = *(volatile uint16_t*)0x4000A708;
-    printf("CKS BE result is %04x, %04x\r\n",
+    blog_info("CKS BE result is %04x, %04x\r\n",
             cks,
             (uint16_t)~checksum
     );
     if (cks == ((uint16_t)~checksum)) {
-        printf("====== Success %04X Checksum=====\r\n", cks);
+        blog_info("====== Success %04X Checksum=====\r\n", cks);
     } else {
-        printf("====== Failed %04X Checksum======\r\n", cks);
+        blog_error("====== Failed %04X Checksum======\r\n", cks);
     }
 }
 
@@ -186,7 +190,7 @@ static void _bl_cks_test_case4()
     *(volatile uint8_t*)0x4000A704 = data_segment_two;
 
     cks = *(volatile uint16_t*)0x4000A708;
-    printf("CKS LE result is %04x, %04x\r\n",
+    blog_info("CKS LE result is %04x, %04x\r\n",
             cks,
             (uint16_t)~checksum
     );
@@ -206,14 +210,14 @@ static void _bl_cks_test_case4()
     *(volatile uint8_t*)0x4000A704 = data_segment_two;
 
     cks = *(volatile uint16_t*)0x4000A708;
-    printf("CKS BE result is %04x, %04x\r\n",
+    blog_info("CKS BE result is %04x, %04x\r\n",
             cks,
             (uint16_t)~checksum
     );
     if (cks == ((uint16_t)~checksum)) {
-        printf("====== Success %04X Checksum=====\r\n", cks);
+        blog_info("====== Success %04X Checksum=====\r\n", cks);
     } else {
-        printf("====== Failed %04X Checksum======\r\n", cks);
+        blog_error("====== Failed %04X Checksum======\r\n", cks);
     }
 }
 
@@ -222,7 +226,7 @@ static void _cb_cmd(void *arg)
     struct bl_dma_item *first;
 
     first = (struct bl_dma_item*)arg;
-    printf("[DMA] [TEST] Callback is working, arg is %p\r\n", arg);
+    blog_info("[DMA] [TEST] Callback is working, arg is %p\r\n", arg);
     first->arg = NULL;
 }
 
@@ -296,23 +300,23 @@ static void _bl_cks_test_case5()
         vTaskDelay(2);
     }
     if (0x6DF1 == cks_result) {
-        printf("====== Success %04X Checksum=====\r\n", cks_result);
+        blog_info("====== Success %04X Checksum=====\r\n", cks_result);
     } else {
-        printf("====== Failed %04X Checksum======\r\n", cks_result);
+        blog_error("====== Failed %04X Checksum======\r\n", cks_result);
     }
 }
 
 int bl_cks_test(void)
 {
-    puts("--->>> case1 test\r\n");
+    blog_info("--->>> case1 test\r\n");
     _bl_cks_test_case1();
-    puts("--->>> case2 test\r\n");
+    blog_info("--->>> case2 test\r\n");
     _bl_cks_test_case2();
-    puts("--->>> case3 test\r\n");
+    blog_info("--->>> case3 test\r\n");
     _bl_cks_test_case3();
-    puts("--->>> case4 test\r\n");
+    blog_info("--->>> case4 test\r\n");
     _bl_cks_test_case4();
-    puts("--->>> case5 test\r\n");
+    blog_info("--->>> case5 test\r\n");
     _bl_cks_test_case5();
     return 0;
 }

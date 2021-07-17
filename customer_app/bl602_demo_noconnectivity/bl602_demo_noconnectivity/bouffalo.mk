@@ -2,6 +2,9 @@
 # "main" pseudo-component makefile.
 #
 # (Uses default behaviour of compiling all source files in directory, adding 'include' to include path.)
+
+include $(BL60X_SDK_PATH)/components/network/ble/ble_common.mk
+
 ifeq ($(CONFIG_ENABLE_PSM_RAM),1)
 CPPFLAGS += -DCONF_USER_ENABLE_PSRAM
 endif
@@ -20,13 +23,4 @@ endif
 
 ifeq ($(CONFIG_ENABLE_VFS_ROMFS),1)
 CPPFLAGS += -DCONF_USER_ENABLE_VFS_ROMFS
-endif
-
-CFLAGS   += -DBFLB_BLE
-ifeq ($(CONFIG_BT_WIFIPROV_SERVER),1)
-CFLAGS   += -DCONFIG_BT_WIFIPROV_SERVER
-endif
-
-ifeq ($(CONFIG_BT_MESH),1)
-CFLAGS   += -DCONFIG_BT_MESH
 endif

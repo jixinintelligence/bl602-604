@@ -2383,6 +2383,7 @@ void vTaskSetTaskNumber( TaskHandle_t xTask, const UBaseType_t uxHandle ) PRIVIL
  * equal to the idle period.
  */
 void vTaskStepTick( const TickType_t xTicksToJump ) PRIVILEGED_FUNCTION;
+void vTaskStepTickSafe( const TickType_t xTicksToJump ) PRIVILEGED_FUNCTION;
 
 /*
  * Only available when configUSE_TICKLESS_IDLE is set to 1.

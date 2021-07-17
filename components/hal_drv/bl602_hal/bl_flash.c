@@ -30,6 +30,8 @@
 #include <bl602_romdriver.h>
 
 #include "bl_flash.h"
+#include <blog.h>
+#define USER_UNUSED(a) ((void)(a))
 
 static struct {
     uint32_t magic;
@@ -85,16 +87,19 @@ int bl_flash_read(uint32_t addr, uint8_t *dst, int len)
 static void _dump_flash_config()
 {
     extern uint8_t __boot2_flashCfg_src;
-    printf("======= FlashCfg magiccode @%p, code 0x%08lX =======\r\n",
+
+    USER_UNUSED(__boot2_flashCfg_src);
+
+    blog_info("======= FlashCfg magiccode @%p, code 0x%08lX =======\r\n",
             &__boot2_flashCfg_src,
             boot2_flashCfg.magic
     );
-    printf("mid \t\t0x%X\r\n", boot2_flashCfg.flashCfg.mid);
-    printf("clkDelay \t0x%X\r\n", boot2_flashCfg.flashCfg.clkDelay);
-    printf("clkInvert \t0x%X\r\n", boot2_flashCfg.flashCfg.clkInvert);
-    printf("sector size\t%uKBytes\r\n", boot2_flashCfg.flashCfg.sectorSize);
-    printf("page size\t%uBytes\r\n", boot2_flashCfg.flashCfg.pageSize);
-    puts("---------------------------------------------------------------\r\n");
+    blog_info("mid \t\t0x%X\r\n", boot2_flashCfg.flashCfg.mid);
+    blog_info("clkDelay \t0x%X\r\n", boot2_flashCfg.flashCfg.clkDelay);
+    blog_info("clkInvert \t0x%X\r\n", boot2_flashCfg.flashCfg.clkInvert);
+    blog_info("sector size\t%uKBytes\r\n", boot2_flashCfg.flashCfg.sectorSize);
+    blog_info("page size\t%uBytes\r\n", boot2_flashCfg.flashCfg.pageSize);
+    blog_info("---------------------------------------------------------------\r\n");
 }
 
 int bl_flash_config_update(void)
@@ -103,3 +108,28 @@ int bl_flash_config_update(void)
 
     return 0;
 }
+
+void* bl_flash_get_flashCfg(void)
+{
+    return &boot2_flashCfg.flashCfg;
+}
+
+int bl_flash_read_byxip(uint32_t addr, uint8_t *dst, int len)
+{
+    uint32_t offset;
+    uint32_t xipaddr;
+
+    offset = RomDriver_SF_Ctrl_Get_Flash_Image_Offset();
+
+    if ((addr < offset) || (addr >= 0x1000000)) {
+        // not support or arg err ?
+        return -1;
+    }
+
+    xipaddr =  0x23000000 - offset + addr;
+
+    memcpy(dst, (void *)xipaddr, len);
+
+    return 0;
+}
+

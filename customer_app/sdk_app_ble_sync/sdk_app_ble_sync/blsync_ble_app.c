@@ -33,7 +33,7 @@
 #include <task.h>
 #include "blsync_ble.h"
 #include "bluetooth.h"
-#include "stack_cli_cmds.h"
+#include "ble_cli_cmds.h"
 #include "hci_driver.h"
 #include "ble_lib_api.h"
 
@@ -41,6 +41,8 @@ static bl_ble_sync_t *gp_index = NULL;
 
 static void wifiprov_connect_ap_ind(struct wifi_conn *info)
 {
+    extern int wifi_mgmr_status_code_clean_internal();
+    wifi_mgmr_status_code_clean_internal();
     printf("Recevied indication to connect to AP\r\n");    
     wifi_prov_api_event_trigger_connect(info);
 }
@@ -86,7 +88,7 @@ static void blsync_init(int err)
         printf("blsync already started\r\n");
         return;
     }
-    blestack_cli_register();
+    ble_cli_register();
     gp_index = pvPortMalloc(sizeof(bl_ble_sync_t));
     if (gp_index == NULL) {
         return;

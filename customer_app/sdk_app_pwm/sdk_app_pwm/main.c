@@ -65,7 +65,6 @@
 #include <bl_gpio_cli.h>
 #include <bl_wdt_cli.h>
 #include <hal_uart.h>
-#include <hal_pwm.h>
 #include <hal_sys.h>
 #include <hal_gpio.h>
 #include <hal_boot2.h>
@@ -84,6 +83,7 @@
 #include <utils_log.h>
 #include <libfdt.h>
 #include <blog.h>
+#include "hal_pwm.h"
 
 #define TASK_PRIORITY_FW            ( 30 )
 
@@ -223,6 +223,108 @@ const static struct cli_command cmds_user[] STATIC_CLI_CMD_ATTRIBUTE = {
     { "pwm_stop", "pwm_stop 0", cmd_pwm_stop},
     { "pwm_task", "pwm_task", cmd_pwm_task},
     { "pwm_test", "pwm_test", cmd_pwm_test},
+};
+
+void __pwm_init(char *buf, int len, int argc, char **argv)
+{
+    int id;
+    if (argc != 2) {
+        log_error("arg err.\r\n");
+        return;
+    }
+    id = atoi(argv[1]);
+    hal_pwm_init(id, id);
+    hal_pwm_duty_set(id, 5000, 0);
+    hal_pwm_start(id);
+}
+
+void __pwm_duty_set(char *buf, int len, int argc, char **argv)
+{
+    uint32_t id, duty, ms;
+
+    if (argc != 4) {
+        log_error("arg err.\r\n");
+        return;
+    }
+
+    id = atoi(argv[1]);
+    duty = atoi(argv[2]);
+    ms = atoi(argv[3]);
+    hal_pwm_duty_set(id, duty, ms);
+}
+
+void __pwm_duty_get(char *buf, int len, int argc, char **argv)
+{
+    uint32_t duty;
+    int id;
+
+    if (argc != 2) {
+        log_error("arg err.\r\n");
+        return;
+    }
+
+    id = atoi(argv[1]);
+
+    hal_pwm_duty_get(id, &duty);
+
+    printf("pwm duty %ld", duty);
+}
+
+void __pwm_freq_set(char *buf, int len, int argc, char **argv)
+{
+    uint32_t freq;
+    int id;
+
+    if (argc != 3) {
+        log_error("arg err.\r\n");
+        return;
+    }
+
+    id = atoi(argv[1]);
+    freq = atoi(argv[2]);
+    hal_pwm_freq_update(id, freq);
+}
+
+void __pwm_freq_get(char *buf, int len, int argc, char **argv)
+{
+    uint32_t freq;
+    int id;
+
+    if (argc != 2) {
+        log_error("arg err.\r\n");
+        return;
+    }
+
+    id = atoi(argv[1]);
+    hal_pwm_freq_get(id, &freq);
+    printf("pwm freq %ld", freq);
+}
+
+void __pwm_stop(char *buf, int len, int argc, char **argv)
+{
+    int id;
+
+    if (argc != 2) {
+        log_error("arg err.\r\n");
+        return;
+    }
+
+    id = atoi(argv[1]);
+    hal_pwm_stop(id);
+}
+
+// hal_pwm_init 0
+// hal_pwm_duty_set 0 9000 20000
+// hal_pwm_duty_set 1 3000 18000
+// hal_pwm_duty_set 2 7000 15000
+// hal_pwm_duty_set 3 7000 15000
+const static struct cli_command hal_pwm_cmds[] STATIC_CLI_CMD_ATTRIBUTE = {
+    { "hal_pwm_init", "pwm_init 0", __pwm_init},
+    { "hal_pwm_duty_set", "pwm_duty_set 0 20000 1000", __pwm_duty_set},
+    { "hal_pwm_duty_get", "pwm_duty_get 0", __pwm_duty_get},
+    { "hal_pwm_freq_set", "pwm_freq_set 0 3000", __pwm_freq_set},
+    { "hal_pwm_freq_get", "pwm_freq_get 0", __pwm_freq_get},
+    { "hal_pwm_stop", "pwm_stop 0", __pwm_stop},
 };
 
 static void _cli_init()

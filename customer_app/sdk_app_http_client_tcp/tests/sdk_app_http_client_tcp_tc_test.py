@@ -35,7 +35,7 @@ def sdk_app_http_client_tcp_tc(env, extra_data):
         dut.expect("Entering wifiConnected_IPOK state", timeout=20)
 
         dut.write('httpc')
-        dut.expect("Transfer finished", timeout=200)
+        dut.expect("Transfer finished", timeout=500)
         
         dut.halt()
     except DUT.ExpectTimeout:

@@ -2,10 +2,13 @@ OUTPUT_ARCH( "riscv" )
 
 ENTRY( bl602_start )
 
+__EM_SIZE = DEFINED(ble_controller_init) ? 8K : 0K;
+
 MEMORY
 {
+  rom       (rxai!w) : ORIGIN = 0x21015000, LENGTH = 44K
   flash     (rxai!w) : ORIGIN = 0x23000000, LENGTH = 4M
-  ram_tcm   (wxa)    : ORIGIN = 0x42010000, LENGTH = (16K + 48K + 64K) /*put itcm with dtam and also OCRAM*/
+  ram_tcm   (wxa)    : ORIGIN = 0x4200C000, LENGTH = (16K + 16K + 48K + 64K) /*put itcm with dtcm and also OCRAM*/
   ram_wifi  (wxa)    : ORIGIN = 0x42030000, LENGTH = (104K) /*leave 8K left for BLE*/
 }
 
@@ -13,7 +16,7 @@ SECTIONS
 {
   __stack_size = DEFINED(__stack_size) ? __stack_size : 2K;
   BOOT2_PT_ADDR = 0x42049C00;
-  BOOT2_FLASHCFG_ADDR = 0x42049d14;
+  BOOT2_FLASHCFG_ADDR = 0x42049c18;
 
   .init           :
   {
@@ -33,11 +36,53 @@ SECTIONS
     *(.rdata)
     *(.rodata .rodata.*)
     *(.sdata2.*)
+
+    /* static cli cmds */
+    . = ALIGN(4);
     _bl_static_cli_cmds_start = .;
     KEEP(*(.static_cli_cmds))
     *(.static_cli_cmds)
     _bl_static_cli_cmds_end = .;
+
+    /* static blog code1 */
+    . = ALIGN(4);
+    _bl_static_blogcomponent_code_start = .;
+    KEEP(SORT(*)(.static_blogcomponent_code*))
+    *(.static_blogcomponent_code*)
+    _bl_static_blogcomponent_code_end = .;
+
+    /* static blog code2 */
+    . = ALIGN(4);
+    _bl_static_blogfile_code_start = .;
+    KEEP(SORT(*)(.static_blogfile_code*))
+    *(.static_blogfile_code*)
+    _bl_static_blogfile_code_end = .;
+
+    /* static blog code3 */
+    . = ALIGN(4);
+    _bl_static_blogpri_code_start = .;
+    KEEP(SORT(*)(.static_blogpri_code*))
+    *(.static_blogpri_code*)
+    _bl_static_blogpri_code_end = .;
+
     *(.gnu.linkonce.r.*)
+  } > flash
+
+  .preinit_array :
+  {
+    . = ALIGN(4);
+    __preinit_array_start = .;
+    KEEP (*(.preinit_array))
+    __preinit_array_end = .;
+  } > flash
+
+  .init_array :
+  {
+    . = ALIGN(4);
+    __init_array_start = .;
+    KEEP (*(SORT_BY_INIT_PRIORITY(.init_array.*)))
+    KEEP (*(.init_array))
+    __init_array_end = .;
   } > flash
 
   /*put wifibss in the first place*/
@@ -73,6 +118,9 @@ SECTIONS
     PROVIDE( _data_run_end = ADDR(.data) + SIZEOF(.data));
 
     *(.tcm_code)
+    *(.tcm_const)
+    *(.sclock_rlt_code)
+    *(.sclock_rlt_const)
     *(.data .data.*)
     *(.gnu.linkonce.d.*)
 
@@ -146,6 +194,15 @@ SECTIONS
   /*SYMOBOL used in code*/
   PROVIDE( _ld_bl_static_cli_cmds_start = _bl_static_cli_cmds_start );
   PROVIDE( _ld_bl_static_cli_cmds_end   = _bl_static_cli_cmds_end );
+
+  /* blog */
+  PROVIDE( _ld_bl_static_blogcomponent_code_start = _bl_static_blogcomponent_code_start );
+  PROVIDE( _ld_bl_static_blogcomponent_code_end   = _bl_static_blogcomponent_code_end );
+  PROVIDE( _ld_bl_static_blogfile_code_start = _bl_static_blogfile_code_start );
+  PROVIDE( _ld_bl_static_blogfile_code_end   = _bl_static_blogfile_code_end );
+  PROVIDE( _ld_bl_static_blogpri_code_start = _bl_static_blogpri_code_start );
+  PROVIDE( _ld_bl_static_blogpri_code_end   = _bl_static_blogpri_code_end );
+
   PROVIDE( _ld_ram_size0 = LENGTH(flash) );
   PROVIDE( _ld_ram_addr0 = ORIGIN(flash) );
   PROVIDE( _ld_ram_size1 = LENGTH(ram_tcm) );
@@ -153,7 +210,10 @@ SECTIONS
   PROVIDE( _ld_ram_size2 = LENGTH(ram_wifi) );
   PROVIDE( _ld_ram_addr2 = ORIGIN(ram_wifi) );
 
+
   /*BOOT2 sections*/
   PROVIDE ( __boot2_pt_addr_src = BOOT2_PT_ADDR );
   PROVIDE ( __boot2_flashCfg_src = BOOT2_FLASHCFG_ADDR ); 
+
+  PROVIDE(__LD_CONFIG_EM_SEL = __EM_SIZE);
 }
